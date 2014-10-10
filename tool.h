@@ -14,6 +14,11 @@
 #include <errno.h>
 #include "tree.h"
 
+enum { 
+  ER_DOCID = -1,  // Docid given was not monotonically increasing
+  ER_FULL=-2      // Inverted file is full
+};
+
 /**
  *  Posix file abstraction, including memory mapping
  */
@@ -51,9 +56,10 @@ struct term_t {
  *  Corpus or term file header.  Written/read at offset 0 of corpus file
  */
 struct corpusheader_t {
-  int64_t count;
-  int     field_count;
-  int64_t size;
+  int64_t count;        // # of terms used [with repeats]
+  int     field_count;  // # of fields indexable
+  int64_t size;         // # of distinct terms
+  int     last_docid;   // last document id indexed.
 };
 
 /**
@@ -103,12 +109,15 @@ struct run_t {
 struct index_t {
   struct corpus_t corpus;
   struct run_t run;
+
+  int (*chunk_size)( const struct term_t *word, int field );
 };
 
 /**
  *  Convenience functions: Load an index from disk
  */
-int index_load( const char *filename, struct index_t *index, int field_count );
+int index_load( const char *filename, struct index_t *index, int field_count,
+  int file_size );
 
 /**
  *  Convenience functions:  Save an index to disk

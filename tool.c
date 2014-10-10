@@ -115,7 +115,7 @@ int chunk_allocate( struct run_t *run, int size,
   *outs = 0;
 
   if( run->header.last + size >= run->header.size ) {
-    return 0;
+    return ER_FULL;
   }
 
   chunk = (struct chunk_t *)(((char*)run->map) + run->header.last);
@@ -230,15 +230,22 @@ int index_word_document( struct index_t *index, int field, const char *word,
   int rc;
   int id;
 
+  if( index->corpus.header.last_docid > docid ) {
+    return ER_DOCID;
+  } else {
+    index->corpus.header.last_docid = docid;
+  }
+
   // See if word exists 
   rc=word_find( &index->corpus, word, &n);
   if( rc ) return rc;
 
   if( !n ) {
-    printf("Word not found: %s\n", word );
     // New term
     rc=word_make( word, 1, &n );
     if( rc ) return rc; 
+
+    n->fields[field].count = 1;
 
     // Allocate a chunk
     rc=chunk_allocate( &index->run, 256, &c, &id);
@@ -247,7 +254,7 @@ int index_word_document( struct index_t *index, int field, const char *word,
     // Setup term properties to point to this chunk so we can find it later
     n->fields[field].first = id;
     n->fields[field].last = id;
-  
+     
     // Finish setting up chunk  
     c->docid = docid;
 
@@ -256,7 +263,6 @@ int index_word_document( struct index_t *index, int field, const char *word,
 
     // In-core term count
     index->corpus.term_count++;
-printf("%d\n", index->corpus.term_count );
   } else {
     // Existing word grab most recent chunk from disk
     rc = chunk_get( &index->run, n->fields[field].last, &c );
@@ -265,6 +271,8 @@ printf("%d\n", index->corpus.term_count );
     // It's full?
     if( c->used + 1 >= c->size ) {
       struct chunk_t *nc=0;
+
+      n->fields[field].count++;
 
       // Allocate a new chunk
       rc=chunk_allocate( &index->run, 256, &nc, &id);
@@ -347,7 +355,6 @@ int corpus_flush( struct corpus_t *corpus, int fd ) {
   }
 
   while( b ) {  
-    printf("%s\n", b->name );
     write(fd, b, TERM_SIZE(corpus->header.field_count));
     k++;
     corpus_get( corpus, k, &b );
@@ -376,20 +383,26 @@ int index_save( struct index_t *index ) {
   return 0;
 }
 
+static int chunk_size( const struct term_t *term, int field ) {
+  return (256<<term->fields[field].count);
+}
+
 /**
  *  Convenience functions: Load an index from disk
  */
-int index_load( const char *filename, struct index_t *index, int field_count ) {
+int index_load( const char *filename, struct index_t *index, 
+  int field_count, int file_size ) {
+
   struct file_t *rfile = 0;
   struct file_t *cfile = 0;
   int rc;
 
   // Always have two files, one for the corpus, the other for the inverted
   // index we call the run file
-  rc = file_open( "./run.data", 100000, &rfile );
+  rc = file_open( "./run.data", 1000, &rfile );
   if( rc ) goto error;
   
-  rc = file_open( "./corpus.data", 100000, &cfile ); 
+  rc = file_open( "./corpus.data", file_size, &cfile ); 
   if( rc ) goto error;
 
   // Copy in the header for each file as well as the memory map pointer
@@ -404,6 +417,8 @@ int index_load( const char *filename, struct index_t *index, int field_count ) {
   // Set aside the file_t structure for later use
   index->corpus.file = cfile;
   index->run.file = rfile;
+
+  index->chunk_size = chunk_size;
 
   // Is this a new file?  If so set the field_count
   if( !index->corpus.header.field_count ) {
