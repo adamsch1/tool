@@ -1,4 +1,4 @@
-h1 Tool a  minimal text indexing and searching library.
+Tool a  minimal text indexing and searching library.
 
 Tool is an intentionally small C library that allows one to create and search
 documents in the form of an inverted word index.  Tool supports multiple 
@@ -29,35 +29,3 @@ These languages typically have a more robust support for non-ascii text
 sources such as PDF, HTML etc.  This means that it is somewhat easier to 
 read, parse and tokenize these data sources in the host language and call 
 into Tool to index the data.
-
-Example of usage:
-
-'''
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include "tool.h"
-
-struct document_t {
-  char data[256];
-};
-
-int main() {
-  struct index_t index = {0};
-  int rc;
-  
-  rc = index_load("", index, 1);
-  if( rc ) {
-    printf("Error: %s\n", strerror(errno));
-    exit -1;
-  }
-
-  rc = index_word_document( &index, 0, "SLUG", 69 );
-  if( rc ) {
-    printf("Error: %s\n", strerror(errno));
-    exit -1;
-  } 
- 
-  return index_save( &idnex ); 
-}
-'''
