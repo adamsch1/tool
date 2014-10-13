@@ -256,11 +256,12 @@ int index_word_document( struct index_t *index, int field, const char *word,
     if( rc || !c ) return rc; 
 
     // Setup term properties to point to this chunk so we can find it later
-    n->fields[field].first = id;
+    n->fields[field].first = id; 
     n->fields[field].last = id;
      
     // Finish setting up chunk  
     c->docid = docid;
+    c->prev = -1;
 
     // Add the word in core.
     word_add(n);
