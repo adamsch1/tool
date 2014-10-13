@@ -9,10 +9,14 @@ struct doc_t {
   char data[256];
   int  id;
 } documents[] = {
-  { "The 45 year old man ate the apple", 1 },
+  {"the", 1},
+  {"the", 2},
+  {"the", 3}
+};
+/*  { "The 45 year old man ate the apple", 1 },
   { "The man ate an orange", 2 },
   { "I spy an orange and apple", 3 }
-};
+};*/
 
 #define DCOUNT() ( sizeof(documents)/sizeof(struct doc_t))
 
@@ -35,6 +39,26 @@ int term_clean( char *term ) {
   } 
 }
 
+int index_find( struct index_t *index, int field, const char *word ) {
+  struct term_t *n;
+  struct chunk_t *c;
+  int rc;
+  int k;
+  int j;
+
+  rc=word_find( &index->corpus, word, &n );
+  if( rc ) return rc;
+  if( !n ) return 0;
+
+  rc=chunk_get( &index->run, n->fields[field].last, &c );
+  if( rc ) return rc;
+
+  for( j=0,k=0; j<c->used; k++,j+=sizeof(int) ) {
+    printf("doc: %d\n", c->run[k]);
+  }
+  
+}
+
 int main() {
   struct index_t index = {0};
   int rc;
@@ -55,6 +79,7 @@ int main() {
       toke = strtok( NULL, " " );
     }
   }
-  
+
+  index_find( &index, 0, "the" );  
   return index_save( &index );
 }

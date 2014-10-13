@@ -87,6 +87,7 @@ error:
   return -1;  
 }
 
+#define CHUNK_SIZE() ( sizeof(struct chunk_t) )
 /**
  *  Grab a chunk pointer from the run file with ID [byte offset currently]
  */
@@ -110,11 +111,14 @@ int chunk_get( struct run_t *run, int id, struct chunk_t **outs ) {
 int chunk_allocate( struct run_t *run, int size, 
   struct chunk_t **outs, int *id ) {
 
+  int real_size = 0;
   struct chunk_t *chunk = 0;
 
   *outs = 0;
 
-  if( run->header.last + size >= run->header.size ) {
+  real_size = size + sizeof(struct chunk_t);
+
+  if( run->header.last + real_size >= run->header.size ) {
     return ER_FULL;
   }
 
@@ -124,7 +128,7 @@ int chunk_allocate( struct run_t *run, int size,
 
   *id = run->header.last++;
 
-  run->header.last += size;
+  run->header.last += real_size;
 
   *outs = chunk;
 
@@ -230,7 +234,7 @@ int index_word_document( struct index_t *index, int field, const char *word,
   int rc;
   int id;
 
-  if( index->corpus.header.last_docid > docid ) {
+  if( index->corpus.header.last_docid >= docid ) {
     return ER_DOCID;
   } else {
     index->corpus.header.last_docid = docid;
@@ -248,7 +252,7 @@ int index_word_document( struct index_t *index, int field, const char *word,
     n->fields[field].count = 1;
 
     // Allocate a chunk
-    rc=chunk_allocate( &index->run, 256, &c, &id);
+    rc=chunk_allocate( &index->run, index->chunk_size(n,field), &c, &id);
     if( rc || !c ) return rc; 
 
     // Setup term properties to point to this chunk so we can find it later
@@ -269,13 +273,13 @@ int index_word_document( struct index_t *index, int field, const char *word,
     if( rc ) return rc;
 
     // It's full?
-    if( c->used + 1 >= c->size ) {
+    if( c->used + sizeof(int) >= c->size ) {
       struct chunk_t *nc=0;
 
       n->fields[field].count++;
 
       // Allocate a new chunk
-      rc=chunk_allocate( &index->run, 256, &nc, &id);
+      rc=chunk_allocate( &index->run, index->chunk_size(n,field), &nc, &id);
       if( rc || !c ) return rc; 
   
       // Setup chunk
@@ -296,7 +300,7 @@ int index_word_document( struct index_t *index, int field, const char *word,
 
   // Finally, add docid to this chunk
   c->run[ c->used ] = docid;
-  c->used++;
+  c->used += sizeof(int);
   n->fields[field].count++;
 
   return 0; 
@@ -377,6 +381,8 @@ int index_save( struct index_t *index ) {
   // Temp corpus to our original file name
   rename( buffer, "./corpus.data" );
 
+  memcpy( index->run.map-sizeof(index->run.header), &index->run.header, sizeof(index->run.header));
+
   file_close( index->run.file );
   file_close( index->corpus.file );
 
@@ -384,7 +390,8 @@ int index_save( struct index_t *index ) {
 }
 
 static int chunk_size( const struct term_t *term, int field ) {
-  return (256<<term->fields[field].count);
+  return 1 * sizeof(int);
+  //return (1<<term->fields[field].count);
 }
 
 /**
