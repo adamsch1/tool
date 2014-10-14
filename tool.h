@@ -193,4 +193,10 @@ int iter_next( struct iter_t *it, int *did );
 int index_find( struct index_t *index, int field, const char *word, int *count,
   int outs[] );
 
+
+/**
+ * 
+ */
+uint32_t crc32(uint32_t crc, const void *buf, size_t size);
+
 #endif
