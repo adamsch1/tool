@@ -393,9 +393,12 @@ int index_save( struct index_t *index ) {
   return 0;
 }
 
+/**
+ * Can make this smarter by calculating block size as function of term 
+ * frequency.
+ */
 static int chunk_size( const struct term_t *term, int field ) {
-  return 1 * sizeof(int);
-  //return (1<<term->fields[field].count);
+  return 256;
 }
 
 /**
@@ -504,6 +507,14 @@ int index_find( struct index_t *index, int field, const char *word, int *count,
   }
   *count = real_count;
   return 0;
+}
+
+unsigned fnv32( const char *term, int hval ) {
+  while( *term ) {
+    hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
+    hval ^= (int)*term++;
+  }
+  return hval;
 }
 
 
