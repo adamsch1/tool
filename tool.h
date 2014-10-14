@@ -114,6 +114,54 @@ struct index_t {
 };
 
 /**
+ * Iterator 
+ */
+struct iter_t {
+  struct run_t *run;
+  struct chunk_t *chunk;
+  struct field_t *field;
+  int k;
+  int j;
+  int chunk_offset;
+  int done;
+};
+
+/**
+ *  Most functions return 0 on success, and non-zero on a low level error
+ *  eg malloc() failed etc.  Check the errno.
+ */
+
+/**
+ *  Grab a chunk pointer from the run file with ID [byte offset currently]
+ */
+int chunk_get( struct run_t *run, int id, struct chunk_t **outs );
+
+/**
+ *  Find term in corpus, if it exists
+ */
+int word_find( struct corpus_t *corpus, const char *word,
+  struct term_t **outs );
+
+/**
+ *  Merge sorts the disk term set against the in-core term data structure
+ *  [currently RB tree].  As our in-core data structure is already sorted,
+ *  this is a linear operation.  The write sink is indicated by the file
+ *  descriptor fd so it can be a local file or remote etc.
+ */
+int corpus_flush( struct corpus_t *corpus, int fd );
+
+/**
+ *  Allocate and initialize a new term
+ */
+int word_make( const char *word, int field_count, struct term_t **outs );
+
+/**
+ *  Store word in-core [currently a RB-TREE].  Call corpus_flush to persist
+ *  when done indexing.
+ */
+int word_add( struct term_t *word );
+
+/**
  *  Convenience functions: Load an index from disk
  */
 int index_load( const char *filename, struct index_t *index, int field_count,
@@ -130,5 +178,19 @@ int index_save( struct index_t *index );
  */
 int index_word_document( struct index_t *index, int field, const char *word,
   int docid);
+
+/**
+ *  Iterator used for walking through chunks.  Offset is chunk pointer.
+ */
+int iter_first( struct iter_t *it, int offset );
+int iter_next( struct iter_t *it, int *did );
+
+/**
+ *  Given a word, copy over count number of document identifiers into outs. 
+ *  This is the lowest level of search.  If less than count items are found
+ *  count is set to the number that were actually copied.
+ */
+int index_find( struct index_t *index, int field, const char *word, int *count,
+  int outs[] );
 
 #endif

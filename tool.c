@@ -442,6 +442,68 @@ error:
   return -1;
 }
 
+int iter_first( struct iter_t *it, int offset ) {
+  it->k = 0;
+  it->j = 0;
+  chunk_get( it->run, offset, &it->chunk );
+  if( !it->chunk ) {
+    it->done = 1;
+  }
+
+  return 0;
+}
+
+int iter_next( struct iter_t *it, int *did ) {
+
+  // Consume the run
+  while( it->j < it->chunk->used ) {
+    it->j += sizeof(int);
+    *did = it->chunk->run[it->k++];
+    return 0;
+  }
+
+  // Hit potential chunk boundry
+  if( it->chunk->prev == -1 ) {
+    // We are at origin chunk for this term, done
+    it->done = 1;
+    return -1;
+  } else {
+    // Still have chucnks left, grab em
+    it->j = it->k = 0;
+    chunk_get( it->run, it->chunk->prev, &it->chunk );
+    return iter_next( it, did );
+  }
+}
+
+int index_find( struct index_t *index, int field, const char *word, int *count,
+  int outs[] ) {
+
+  struct term_t *n;
+  struct chunk_t *c;
+  struct iter_t it = {0};
+  int rc;
+  int did;
+  int real_count = 0;
+
+  rc=word_find( &index->corpus, word, &n );
+  if( rc ) return rc;
+  if( !n ) return 0;
+
+  rc=chunk_get( &index->run, n->fields[field].last, &c );
+  if( rc ) return rc;
+
+  it.run = &index->run;
+  it.field = &n->fields[field];
+
+  iter_first( &it, n->fields[field].last );
+  while( iter_next(&it, &did ) == 0 && real_count < *count ) {
+    outs[real_count++] = did;
+  }
+  *count = real_count;
+  return 0;
+}
+
+
 /*
 int main() {
   struct term_t *n;
