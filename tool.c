@@ -15,7 +15,7 @@
 /**
  *  Comparator for RB declarations as required by man tree.h 3
  */
-int wordcmp( struct term_t *a, struct term_t *b ) {
+static int wordcmp( struct term_t *a, struct term_t *b ) {
   return strcmp(a->name, b->name);
 }
 
@@ -43,7 +43,9 @@ int file_close( struct file_t *in ) {
 /**
  *  This opens/creates a file and memory maps it.
  */
-int file_open( const char *fpath, int file_size, struct file_t **outs ) {
+static int file_open( const char *fpath, int file_size, 
+  struct file_t **outs ) {
+
   int fd=0;
   struct stat sb;
   void *map = 0;
@@ -88,6 +90,7 @@ error:
 }
 
 #define CHUNK_SIZE() ( sizeof(struct chunk_t) )
+
 /**
  *  Grab a chunk pointer from the run file with ID [byte offset currently]
  */
@@ -108,7 +111,7 @@ int chunk_get( struct run_t *run, int id, struct chunk_t **outs ) {
 /**
  *  Allocates a new chunk on disk.
  */
-int chunk_allocate( struct run_t *run, int size, 
+static int chunk_allocate( struct run_t *run, int size, 
   struct chunk_t **outs, int *id ) {
 
   int real_size = 0;
@@ -208,7 +211,7 @@ int word_find( struct corpus_t *corpus, const char *word,
 /**
  *  Get a term from the corpus file given the logical offset k
  */
-int corpus_get( struct corpus_t *corpus, int k, struct term_t **outs ) {
+static int corpus_get( struct corpus_t *corpus, int k, struct term_t **outs ) {
   struct term_t *term;
 
   *outs = 0;
