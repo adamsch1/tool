@@ -122,6 +122,7 @@ struct iter_t {
   struct field_t *field;
   int k;
   int j;
+  int start;
   int chunk_offset;
   int done;
 };
@@ -182,7 +183,8 @@ int index_word_document( struct index_t *index, int field, const char *word,
 /**
  *  Iterator used for walking through chunks.  Offset is chunk pointer.
  */
-int iter_first( struct iter_t *it, int offset );
+//int iter_first( struct iter_t *it, int offset );
+int iter_first( struct index_t *index, int field, const char *word, struct iter_t *it );
 int iter_next( struct iter_t *it, int *did );
 
 /**
@@ -190,13 +192,13 @@ int iter_next( struct iter_t *it, int *did );
  *  This is the lowest level of search.  If less than count items are found
  *  count is set to the number that were actually copied.
  */
-int index_find( struct index_t *index, int field, const char *word, int *count,
-  int outs[] );
+int index_find( struct index_t *index, int field, const char *word, 
+  struct iter_t *it, int *count, int outs[] );
 
 /**
  *  
  */
-unsigned fnv32( const char *term, int prev );
+unsigned fnv32( const char *term, unsigned prev );
 
 /**
  * 

@@ -44,6 +44,7 @@ int main() {
   int rc;
   int k;
   int result[10];
+  struct iter_t it = {0};
 
   rc = index_load( "", &index, 1, 100000 );
   if( rc ) {
@@ -62,7 +63,7 @@ int main() {
   }
 
   k = 10;
-  index_find( &index, 0, "the", &k, result );  
-  index_find( &index, 0, "appl", &k, result );  
+  index_find( &index, 0, "the", &it, &k, result );  
+//  index_find( &index, 0, "appl", &k, result );  
   return index_save( &index );
 }

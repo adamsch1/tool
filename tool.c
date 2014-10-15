@@ -448,10 +448,36 @@ error:
   return -1;
 }
 
-int iter_first( struct iter_t *it, int offset ) {
+/**
+ *  Initialize the iterator
+ */
+int iter_first( struct index_t *index, int field, const char *word, 
+  struct iter_t *it ) {
+
+  int rc;
+  struct term_t *n;
+  struct chunk_t *c;
+  int did;
+  int real_count = 0;
+
+  rc=word_find( &index->corpus, word, &n );
+  if( rc ) return rc;
+  if( !n ) return 0;
+
+  rc=chunk_get( &index->run, n->fields[field].last, &it->chunk );
+  if( rc ) return rc;
+
+  if( !it->chunk ) {
+    it->done = 1;
+  }
+
+  it->run = &index->run;
+  it->field = &n->fields[field];
+
   it->k = 0;
   it->j = 0;
-  chunk_get( it->run, offset, &it->chunk );
+  it->start = 1;
+
   if( !it->chunk ) {
     it->done = 1;
   }
@@ -481,35 +507,42 @@ int iter_next( struct iter_t *it, int *did ) {
   }
 }
 
-int index_find( struct index_t *index, int field, const char *word, int *count,
-  int outs[] ) {
-
+/**
+ *  Given a word, initialize the iterator and copy count document ids to 
+ *  the outs array.  Iterater can be reused to bulk copy more until there 
+ *  are no more document ids left
+ */
+int index_find( struct index_t *index, int field, const char *word, 
+  struct iter_t *it, int *count, int outs[] ) {
+  
   struct term_t *n;
   struct chunk_t *c;
-  struct iter_t it = {0};
   int rc;
   int did;
   int real_count = 0;
 
-  rc=word_find( &index->corpus, word, &n );
-  if( rc ) return rc;
-  if( !n ) return 0;
+  if( it->start == 0 ) {
+    rc=word_find( &index->corpus, word, &n );
+    if( rc ) return rc;
+    if( !n ) return 0;
 
-  rc=chunk_get( &index->run, n->fields[field].last, &c );
-  if( rc ) return rc;
+    rc=chunk_get( &index->run, n->fields[field].last, &c );
+    if( rc ) return rc;
 
-  it.run = &index->run;
-  it.field = &n->fields[field];
+    it->run = &index->run;
+    it->field = &n->fields[field];
 
-  iter_first( &it, n->fields[field].last );
-  while( iter_next(&it, &did ) == 0 && real_count < *count ) {
+    iter_first( index, field, word,  it); //, n->fields[field].last );
+  }
+
+  while( iter_next(it, &did ) == 0 && real_count < *count ) {
     outs[real_count++] = did;
   }
   *count = real_count;
   return 0;
 }
 
-unsigned fnv32( const char *term, int hval ) {
+unsigned fnv32( const char *term, unsigned hval ) {
   while( *term ) {
     hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
     hval ^= (int)*term++;
