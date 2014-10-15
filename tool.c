@@ -385,7 +385,8 @@ int index_save( struct index_t *index ) {
   // Temp corpus to our original file name
   rename( buffer, "./corpus.data" );
 
-  memcpy( index->run.map-sizeof(index->run.header), &index->run.header, sizeof(index->run.header));
+  memcpy( index->run.map-sizeof(index->run.header), &index->run.header, 
+    sizeof(index->run.header));
 
   file_close( index->run.file );
   file_close( index->corpus.file );

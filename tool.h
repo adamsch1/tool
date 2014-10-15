@@ -181,16 +181,23 @@ int index_word_document( struct index_t *index, int field, const char *word,
   int docid);
 
 /**
- *  Iterator used for walking through chunks.  Offset is chunk pointer.
+ *  Initialize an iterator in preperation for walking document "runs" which 
+ *  will allows you to find all the documents that contain a given term.
  */
-//int iter_first( struct iter_t *it, int offset );
-int iter_first( struct index_t *index, int field, const char *word, struct iter_t *it );
-int iter_next( struct iter_t *it, int *did );
+int iter_first( struct index_t *index, int field, const char *word, 
+  struct iter_t *it );
 
 /**
- *  Given a word, copy over count number of document identifiers into outs. 
- *  This is the lowest level of search.  If less than count items are found
- *  count is set to the number that were actually copied.
+ * Returns the next document identifier.  
+ */
+inline int iter_next( struct iter_t *it, int *did );
+
+/**
+ *  Wrapper around iter_first.  Given a term, this will prepare an iterator
+ *  and copy over count number of document identifiers into the outs array.
+ *  count will be set to the real number of document ids copied if less than
+ *  count results were found.  The iterator can be resused to builk copy
+ *  additional sets of document ids.
  */
 int index_find( struct index_t *index, int field, const char *word, 
   struct iter_t *it, int *count, int outs[] );
