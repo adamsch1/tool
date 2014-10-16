@@ -51,12 +51,18 @@ int main() {
     printf("error: %s\n", strerror(errno));
     return rc;
   }  
+ 
+  index.growth_amount = 300;
 
   for( k=0; k<DCOUNT(); k++ ) {
     char *toke = strtok( documents[k].data, " ");
     while( toke ) {
       if( term_clean(toke) ) {   
-        index_word_document( &index, 0, toke, documents[k].id );
+        rc = index_word_document( &index, 0, toke, documents[k].id );
+        if( rc == ER_FULL ) {
+          printf("FULL\n");
+          return -1;
+        }
       }
       toke = strtok( NULL, " " );
     }
