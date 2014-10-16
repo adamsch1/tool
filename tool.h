@@ -109,7 +109,7 @@ struct run_t {
 struct index_t {
   struct corpus_t corpus;
   struct run_t run;
-
+  int growth_amount;
   int (*chunk_size)( const struct term_t *word, int field );
 };
 

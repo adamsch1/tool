@@ -41,6 +41,31 @@ int file_close( struct file_t *in ) {
 }
 
 /**
+ *  Grow the file by the specified amount
+ */
+int file_reopen( struct file_t *file, int new_size ) {
+  int rc;
+  int real_size;
+  void *map = 0;
+
+  real_size = file->size + new_size;
+
+  rc = ftruncate( file->fd, real_size );
+  if( rc ) { return rc; }
+
+  rc = munmap( file->map, file->size );
+  if( rc ) { return rc; }
+
+  map = mmap( NULL, real_size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0 );
+  if( map == MAP_FAILED ) return rc;
+
+  file->map = map;
+  file->size = real_size;
+
+  return 0;
+}
+
+/**
  *  This opens/creates a file and memory maps it.
  */
 static int file_open( const char *fpath, int file_size, 
@@ -226,6 +251,44 @@ static int corpus_get( struct corpus_t *corpus, int k, struct term_t **outs ) {
 }
 
 /**
+ *  Allocate chunk, if fail grow file and try once more
+ */
+static int safe_chunk_allocate( struct index_t *index, int size, 
+  struct chunk_t **outs, int *id ) {
+
+  int rc;
+
+  rc=chunk_allocate( &index->run, size, outs, id);
+  if( rc == ER_FULL ) {
+    int needed = (index->run.header.last + size) - index->run.header.size;
+    int extra=2;
+
+    // We need needed number of bytes additional
+    if( needed > 0 ) {
+      needed += size;
+      if( needed > index->growth_amount ) {
+        // Index-level growth rate too small, calculate substitute
+        while( needed >>= 1) extra <<= 1; // Nearest power of 2 ceil
+      } else {
+        // Our index-level growth rate is sufficient, use it
+        extra = index->growth_amount;
+      }
+    }
+    rc = file_reopen( index->run.file, extra );
+    if( rc ) return rc;
+
+    // Reset map
+    index->run.map = index->run.file->map + sizeof(index->run.header);
+    index->run.header.size = index->run.file->size;
+
+    // And allocate
+    return chunk_allocate( &index->run, size, outs, id);
+  } else  {
+    return rc;
+  }
+}
+ 
+/**
  *  Given word, a document identifier and the logical field, add to the 
  *  inverted index.
  */
@@ -239,8 +302,6 @@ int index_word_document( struct index_t *index, int field, const char *word,
 
   if( index->corpus.header.last_docid >= docid ) {
     return ER_DOCID;
-  } else {
-    index->corpus.header.last_docid = docid;
   }
 
   // See if word exists 
@@ -255,7 +316,8 @@ int index_word_document( struct index_t *index, int field, const char *word,
     n->fields[field].count = 1;
 
     // Allocate a chunk
-    rc=chunk_allocate( &index->run, index->chunk_size(n,field), &c, &id);
+//    rc=chunk_allocate( &index->run, index->chunk_size(n,field), &c, &id);
+    rc = safe_chunk_allocate( index, index->chunk_size(n,field), &c, &id );
     if( rc || !c ) return rc; 
 
     // Setup term properties to point to this chunk so we can find it later
@@ -306,6 +368,8 @@ int index_word_document( struct index_t *index, int field, const char *word,
   c->run[ c->used ] = docid;
   c->used += sizeof(int);
   n->fields[field].count++;
+
+  index->corpus.header.last_docid = docid;
 
   return 0; 
 }
@@ -414,7 +478,7 @@ int index_load( const char *filename, struct index_t *index,
 
   // Always have two files, one for the corpus, the other for the inverted
   // index we call the run file
-  rc = file_open( "./run.data", 1000, &rfile );
+  rc = file_open( "./run.data", 500, &rfile );
   if( rc ) goto error;
   
   rc = file_open( "./corpus.data", file_size, &cfile ); 
