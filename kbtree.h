@@ -35,8 +35,7 @@
 #define KB_MAX_DEPTH 64
 
 typedef struct {
-	uint32_t is_internal:1;
-	int32_t n:31;
+	uint32_t is_internal:1, n:31;
 } kbnode_t;
 
 typedef struct {

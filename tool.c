@@ -2,25 +2,25 @@
 #include <math.h>
 
 int ltest() {
-  chunk_list_t clist = {0};
+  chunk_t chunk = {0};
   struct list_head *pos;
 
   int k;
   uint32_t count =0;
-  uint32_t bcount=0;
 
-  INIT_LIST_HEAD( &clist.list );
+	chunk_init(&chunk);
+	chunk_list_init( &chunk );
   for( k=0; k<2<<24; k++ ) {
     count++;
-    chunk_list_push( &clist, 1 );
+    chunk_list_push( &chunk, 1 );
   }
   for( k=0; k<2<<24; k++ ) {
     count++;
-    chunk_list_push( &clist, 1 );
+    chunk_list_push( &chunk, 1 );
   }
 
   k = 0;
-  list_for_each( pos, &clist.list) {
+  list_for_each( pos, &chunk.list) {
     k++;
   }
   printf("count: %d %d\n",k, count);
@@ -46,13 +46,12 @@ void stest1() {
 void stest2() {
 	sorter_t *s;
 	s = sorter_init();
-	int r;
   for( int k=1; k<2<<24; k++ ) {
     sorter_push( s, k % 1000,k );
   }
+	sorter_dump( s );
 }
 int main() {
-	srand( time(0));
 //	ltest();
 
 	stest2();

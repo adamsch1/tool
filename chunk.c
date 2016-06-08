@@ -20,6 +20,7 @@ int chunk_init( chunk_t *chunk ) {
 	chunk->max_size = 2<<22;
 	chunk->capacity = 0;
 	chunk->buffer = (uint32_t *)malloc( sizeof(uint32_t) * chunk->capacity );
+	INIT_LIST_HEAD( &chunk->list );
 
 	return 0;
 }
@@ -57,22 +58,22 @@ void chunk_free( chunk_t *chunk ) {
 }
 
 
-void chunk_list_init( chunk_list_t *list ) {
-	INIT_LIST_HEAD( &list->list );
+void chunk_list_init( chunk_t *chunk ) {
+	INIT_LIST_HEAD( &chunk->list );
 }
 
-int chunk_list_push( chunk_list_t *list, uint32_t doc ) {
-	struct list_head *entry = &list->list;
+int chunk_list_push( chunk_t *chunk, uint32_t doc ) {
+	struct list_head *entry = &chunk->list;
 	chunk_t *c = 0;
 
-	if( list_empty( entry ) || chunk_full( (c=list_entry(entry->prev, chunk_t, list)) ) ) {
+	if( chunk_full( chunk ) ){
 		if( c ) {
 			chunk_compress( c, &c->bcount ); 
 		}
 		c = malloc(sizeof(*c));
 		memset(c,0,sizeof(*c));
 		chunk_init(c);
-		list_add_tail( &c->list, &list->list );
+		list_add_tail( &c->list, &chunk->list );
 	}	
 	c = list_entry( entry->prev, chunk_t, list );
 
@@ -111,8 +112,8 @@ void chunk_decompress( chunk_t *chunk, uint32_t N ) {
 int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 	// ALlocate enough data to read in the compressed bytes
 	uint8_t *cbuffer = malloc( N * sizeof(uint32_t));
-  fread( cbuffer, bcount, 1, in ); // bcount and N will be pointers intside head
-
+  int rc = fread( cbuffer, bcount, 1, in ); // bcount and N will be pointers intside head
+	assert(rc == 1 );
 	chunk_decompress( chunk, N );
 
 	// Compressed buffer no longer needed

@@ -1,6 +1,8 @@
 #ifndef _LINUX_LIST_H
 #define _LINUX_LIST_H
 
+#include "stddef.h"
+
 /*
  * These are non-NULL pointers that will result in page faults
  * under normal circumstances, used to verify that nobody uses
@@ -232,7 +234,7 @@ static inline void list_splice_init(struct list_head *list,
  * @head:	the head for your list.
  */
 #define list_for_each(pos, head) \
-	for (pos = (head)->next; prefetch(pos->next) && pos != (head); \
+	for (pos = (head)->next; pos != (head); \
         	pos = pos->next)
 
 /**
