@@ -1,5 +1,5 @@
 project(tool)
-set(CMAKE_C_FLAGS "-fpic -mavx -std=c11 -pedantic -g -Wall -Wextra -lm")
+set(CMAKE_C_FLAGS "-fpic -mavx -std=c11 -pedantic -g -O3 -Wall -Wextra -lm")
 set(CMAKE_C_FLAGS_RELEASE "-g")
 set(CMAKE_CXX_FLAGS "-g -std=c++11")
 

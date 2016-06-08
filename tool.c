@@ -19,7 +19,9 @@ int ltest() {
   }
 
   k = 0;
+	chunk_t *c;
   list_for_each( pos, &chunk.list) {
+		c = list_entry(pos, chunk_t, list);
     k++;
   }
   printf("count: %d %d\n",k, count);
@@ -42,6 +44,15 @@ void stest1() {
 	sorter_push(s,1,2);
 }
 
+void stest3() {
+	sorter_t *s;
+	s = sorter_init();
+	for( int k=1; k<2<<24; k++ ) {
+    sorter_push( s, k,k);
+	}
+	sorter_dump( s );
+}
+
 void stest2() {
 	sorter_t *s;
 	s = sorter_init();
@@ -53,6 +64,6 @@ void stest2() {
 int main() {
 //	ltest();
 
-	stest2();
+	stest3();
 }
 

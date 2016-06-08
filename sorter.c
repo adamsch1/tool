@@ -1,7 +1,14 @@
 #include "tool.h"
 
+typedef struct entry_t entry_t;
+
+struct entry_t {
+	chunk_t *chunk;
+	uint32_t term;
+};
+
 #define int_cmp(a,b) ((int)(a).term-(int)(b).term)
-KBTREE_INIT(chunk, chunk_t, int_cmp)
+KBTREE_INIT(chunk, entry_t, int_cmp)
 
 struct _sorter_t {
   kbtree_t(chunk) *b;
@@ -15,8 +22,8 @@ sorter_t * sorter_init( ) {
 
 
 void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc ) {
-	chunk_t t;
-  chunk_t *p;
+	entry_t t;
+  entry_t *p;
 
 	t.term = term;
 
@@ -28,28 +35,32 @@ void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc ) {
 		// Now get actual address to entry that was allocated internally via btree
 		p = kb_getp( chunk, sorter->b, &t );
 		// Now we can initialize our object since we have self referential pointers
-		chunk_init(p);
+		p->chunk = malloc( sizeof( *p->chunk ));
+		memset( p->chunk, 0, sizeof(*p->chunk));
+		chunk_init(p->chunk);
 		p->term = term;
-		chunk_list_push( p, doc );
+		chunk_list_push( p->chunk, doc );
 	} else {
-		chunk_list_push( p, doc );
+		chunk_list_push( p->chunk, doc );
 	}
 }
 
 void sorter_dump( sorter_t *sorter ) {
 	kbitr_t itr;
-	//chunk_list_t t = {0};
-  //chunk_list_t *p;
-	/*
 	struct list_head *pos;
-	kb_itr_first( chunk_list, sorter->b, &itr );
-	for(; kb_itr_valid(&itr); kb_itr_next( chunk_list, sorter->b, &itr)) {
-		p = &kb_itr_key(chunk_list_t, &itr);
-		list_for_each( pos, &p->list) {
+	entry_t *p;
+	kb_itr_first( chunk, sorter->b, &itr );
+	for(; kb_itr_valid(&itr); kb_itr_next( chunk, sorter->b, &itr)) {
+		p = &kb_itr_key(entry_t, &itr);
+		chunk_t *chunk = list_entry( p, chunk_t, list);
+		chunk->term = p->term;
+	  printf("%d ", chunk->term);
+
+		list_for_each( pos, &p->chunk->list) {
 			chunk_t *chunk = list_entry( pos, chunk_t, list);
 			chunk->term = p->term;
 		  printf("%d ", chunk->term);
 		}
 		printf("\n");
-	}*/
+	}
 }
