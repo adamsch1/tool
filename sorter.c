@@ -40,8 +40,10 @@ void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc ) {
 		chunk_init(p->chunk);
 		p->term = term;
 		chunk_list_push( p->chunk, doc );
+	} else if( chunk_full( p->chunk ) ) {
+		p->chunk = chunk_list_push( p->chunk, doc );
 	} else {
-		chunk_list_push( p->chunk, doc );
+		p->chunk = chunk_list_push( p->chunk, doc );
 	}
 }
 
@@ -50,17 +52,11 @@ void sorter_dump( sorter_t *sorter ) {
 	struct list_head *pos;
 	entry_t *p;
 	kb_itr_first( chunk, sorter->b, &itr );
+	int k=0;
 	for(; kb_itr_valid(&itr); kb_itr_next( chunk, sorter->b, &itr)) {
+		k++;
 		p = &kb_itr_key(entry_t, &itr);
-		chunk_t *chunk = list_entry( p, chunk_t, list);
-		chunk->term = p->term;
-	  printf("%d ", chunk->term);
 
-		list_for_each( pos, &p->chunk->list) {
-			chunk_t *chunk = list_entry( pos, chunk_t, list);
-			chunk->term = p->term;
-		  printf("%d ", chunk->term);
-		}
-		printf("\n");
 	}
+	printf("%d \n",k);
 }

@@ -5,11 +5,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "list.h"
 #include "kbtree.h"
 
+typedef struct chunk_t chunk_t;
 // Array of document ids.  Can be compressed.  Can be chained in memory as a list
-typedef struct {
+struct chunk_t {
   size_t   capacity;
   uint32_t size;
 
@@ -24,8 +24,8 @@ typedef struct {
 	uint32_t term;
   uint32_t bcount;
 
-  struct list_head list;
-} chunk_t;
+	chunk_t *next;
+};
 
 typedef struct _sorter_t sorter_t;
 
@@ -35,8 +35,9 @@ int chunk_init( chunk_t *chunk );
 int chunk_push( chunk_t *chunk, uint32_t value );
 int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value );
 void chunk_free( chunk_t *chunk );
+int chunk_full( chunk_t *chunk );
 
-int chunk_list_push( chunk_t *chunk, uint32_t doc );
+chunk_t * chunk_list_push( chunk_t *chunk, uint32_t doc );
 void chunk_decompress( chunk_t *chunk, uint32_t N );
 
 sorter_t * sorter_init();

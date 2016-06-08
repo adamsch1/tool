@@ -9,7 +9,6 @@
 #include <unicode/ubrk.h>
 #include <unicode/ustring.h>
 #include "streamvbytedelta.h"
-#include "list.h"
 
 #include "tool.h"
 
@@ -21,7 +20,6 @@ int chunk_init( chunk_t *chunk ) {
 	chunk->max_size = 2<<22;
 	chunk->capacity = 0;
 	chunk->buffer = (uint32_t *)malloc( sizeof(uint32_t) * chunk->capacity );
-	INIT_LIST_HEAD( &chunk->list );
 
 	return 0;
 }
@@ -58,22 +56,22 @@ void chunk_free( chunk_t *chunk ) {
   else if( chunk->is_compressed ) free(chunk->cbuff ); 	
 }
 
-int chunk_list_push( chunk_t *chunk, uint32_t doc ) {
-	struct list_head *entry = &chunk->list;
-	chunk_t *c = 0;
+chunk_t * chunk_list_push( chunk_t *chunk, uint32_t doc ) {
 
-	if( chunk_full( chunk ) ){
-		if( c ) {
-			chunk_compress( c, &c->bcount ); 
+	if( chunk == NULL || chunk_full( chunk ) ){
+		if( chunk ) {
+		  chunk_compress( chunk, &chunk->bcount ); 
 		}
-		c = malloc(sizeof(*c));
+		chunk_t *c = malloc(sizeof(*c));
 		memset(c,0,sizeof(*c));
 		chunk_init(c);
-		list_add_tail( &c->list, &chunk->list );
-	}	
-	c = list_entry( entry->prev, chunk_t, list );
-
-	return chunk_push( c, doc );
+		c->next = chunk;
+	  chunk_push( c, doc );
+    return c;
+	} else {	
+	  chunk_push( chunk, doc );
+	}
+	return chunk;
 }
 
 // Vint compress chunk assumes entires are sorted in ascending order
@@ -115,56 +113,4 @@ int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 
 	return 0;
 }
-
-#if 0
-int ctest() {
-	chunk_t c = {0};
-	chunk_init(&c);
-	int k;
-	uint32_t bcount=0;
-	for( k=0; k<2<<24; k++ ) {
-	  chunk_push( &c, 1 );
-	}
-  chunk_push( &c, 1 );
-
-	chunk_compress( &c, &bcount );
-	chunk_decompress( &c, 2<<22 );
-	chunk_free( &c );
-	return 0;
-}
-
-int ltest() {
-	chunk_list_t clist = {0};
-  struct list_head *pos;
-
-	int k;
-	uint32_t count =0;
-	uint32_t bcount=0;
-
-	INIT_LIST_HEAD( &clist.list );
-	for( k=0; k<2<<24; k++ ) {
-		count++;
-	  chunk_list_push( &clist, 1 );
-	}
-	for( k=0; k<2<<24; k++ ) {
-		count++;
-	  chunk_list_push( &clist, 1 );
-	}
-
-	k = 0;
-	list_for_each( pos, &clist.list) {
-		k++;
-	}
-	printf("count: %d %d\n",k, count);
-	return 0;
-}
-
-int main() {
-	ctest();
-	ltest();
-}
-
-#endif
-
-
 

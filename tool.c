@@ -3,7 +3,6 @@
 
 int ltest() {
   chunk_t chunk = {0};
-  struct list_head *pos;
 
   int k;
   uint32_t count =0;
@@ -20,10 +19,6 @@ int ltest() {
 
   k = 0;
 	chunk_t *c;
-  list_for_each( pos, &chunk.list) {
-		c = list_entry(pos, chunk_t, list);
-    k++;
-  }
   printf("count: %d %d\n",k, count);
   return 0;
 }
@@ -61,9 +56,20 @@ void stest2() {
   }
 	sorter_dump( s );
 }
+
+void stest4() {
+	sorter_t *s;
+	s = sorter_init();
+  for( int k=1; k<2<<24; k++ ) {
+    sorter_push( s, k % 2,k );
+  }
+	sorter_dump( s );
+}
+
 int main() {
 //	ltest();
-
-	stest3();
+//	stest3();
+//	stest2();
+	stest4();
 }
 
