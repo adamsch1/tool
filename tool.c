@@ -9,7 +9,6 @@ int ltest() {
   uint32_t count =0;
 
 	chunk_init(&chunk);
-	chunk_list_init( &chunk );
   for( k=0; k<2<<24; k++ ) {
     count++;
     chunk_list_push( &chunk, 1 );

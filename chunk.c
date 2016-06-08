@@ -17,6 +17,7 @@ uint8_t * chunk_compress( chunk_t *chunk, uint32_t *bcount );
 int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk );
 
 int chunk_init( chunk_t *chunk ) {
+	memset( chunk, 0, sizeof(*chunk));
 	chunk->max_size = 2<<22;
 	chunk->capacity = 0;
 	chunk->buffer = (uint32_t *)malloc( sizeof(uint32_t) * chunk->capacity );
@@ -57,11 +58,6 @@ void chunk_free( chunk_t *chunk ) {
   else if( chunk->is_compressed ) free(chunk->cbuff ); 	
 }
 
-
-void chunk_list_init( chunk_t *chunk ) {
-	INIT_LIST_HEAD( &chunk->list );
-}
-
 int chunk_list_push( chunk_t *chunk, uint32_t doc ) {
 	struct list_head *entry = &chunk->list;
 	chunk_t *c = 0;
@@ -79,8 +75,6 @@ int chunk_list_push( chunk_t *chunk, uint32_t doc ) {
 
 	return chunk_push( c, doc );
 }
-
-
 
 // Vint compress chunk assumes entires are sorted in ascending order
 uint8_t * chunk_compress( chunk_t *chunk, uint32_t *bcount ) {

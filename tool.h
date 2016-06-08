@@ -39,8 +39,6 @@ void chunk_free( chunk_t *chunk );
 int chunk_list_push( chunk_t *chunk, uint32_t doc );
 void chunk_decompress( chunk_t *chunk, uint32_t N );
 
-void chunk_list_init( chunk_t *list );
-
 sorter_t * sorter_init();
 void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc );
 void sorter_dump( sorter_t *sorter );

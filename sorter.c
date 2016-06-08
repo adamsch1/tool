@@ -23,15 +23,13 @@ void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc ) {
 	p = kb_getp( chunk, sorter->b, &t );
 
 	if( !p ) {
-		//printf("here: %d %x %x %x\n", term, p, &t, sorter->b );
 		// okay put an uninitialized entry in the btree.  (important)
 		kb_putp( chunk, sorter->b, &t );
 		// Now get actual address to entry that was allocated internally via btree
 		p = kb_getp( chunk, sorter->b, &t );
-		memset( p, 0,sizeof(*p));
-		p->term = term;
 		// Now we can initialize our object since we have self referential pointers
 		chunk_init(p);
+		p->term = term;
 		chunk_list_push( p, doc );
 	} else {
 		chunk_list_push( p, doc );
