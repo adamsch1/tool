@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -6,17 +5,8 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 
-#define MEGA (1024*1024llu)
-
-#include <parallel/algorithm>
 #include <algorithm>
 #include <iterator>
-
-#define PMODE 1
-
-int icmp( const void *a, const void *b ) {
-	return *(uint64_t*)a - *(uint64_t*)b;
-}
 
 int main( int argc, char **argv ) {
 
@@ -37,6 +27,7 @@ int main( int argc, char **argv ) {
 
 	// Calculate how much memory we have and the nallocate mpercent of that for our use
 	struct sysinfo info = {0};
+	// Not portable but meh.
 	sysinfo( &info );
 	msize = (uint64_t)(info.totalram * mpercent / 100.0);
 	while( (buffer= (uint64_t*)malloc( msize )) == NULL ) {
@@ -50,12 +41,8 @@ int main( int argc, char **argv ) {
 	while( fread( &data, sizeof(data),1, stdin) > 0)  {
 		buffer[k++] = data;
 		if( k == moffset ) {
-#ifdef PMODE
 			// I found std::sort to be fastest on my system, hence g++
 			std::sort( buffer, buffer + k );
-#else 
-			qsort( buffer, moffset, sizeof(uint64_t), icmp );
-#endif
 			fwrite( buffer, sizeof(uint64_t), k, stdout );
 			k = 0;
 		}

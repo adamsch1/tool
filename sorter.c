@@ -20,7 +20,6 @@ sorter_t * sorter_init( ) {
 	return s;
 }
 
-
 void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc ) {
 	entry_t t;
   entry_t *p;
@@ -47,7 +46,7 @@ void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc ) {
 	}
 }
 
-void sorter_dump( sorter_t *sorter ) {
+void sorter_dump( sorter_t *sorter, FILE *outs ) {
 	kbitr_t itr;
 	struct list_head *pos;
 	entry_t *p;
@@ -56,7 +55,6 @@ void sorter_dump( sorter_t *sorter ) {
 	for(; kb_itr_valid(&itr); kb_itr_next( chunk, sorter->b, &itr)) {
 		k++;
 		p = &kb_itr_key(entry_t, &itr);
-
 	}
 	printf("%d \n",k);
 }

@@ -23,14 +23,16 @@ int ltest() {
   return 0;
 }
 
+/*
 void stest() {
 	sorter_t *s;
 	s = sorter_init();
   for( int k=0; k<2<<24; k++ ) {
     sorter_push( s, 1,k );
   }
-}
+}*/
 
+/*
 void stest1() {
 	sorter_t *s;
 	s = sorter_init();
@@ -60,16 +62,20 @@ void stest2() {
 void stest4() {
 	sorter_t *s;
 	s = sorter_init();
+	int count=0;
   for( int k=1; k<2<<24; k++ ) {
-    sorter_push( s, k % 2,k );
+    sorter_push( s, k%1000,k );
+		count++;
   }
+	printf("%d %d\n", count, 2<<24 );
 	sorter_dump( s );
 }
+*/
 
 int main() {
 //	ltest();
 //	stest3();
 //	stest2();
-	stest4();
+//	stest4();
 }
 

@@ -1,2 +1,625 @@
-int main() {
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <unistd.h>
+#include <string.h>
+#include <curl/curl.h>
+#include <gumbo.h>
+#include <unicode/ubrk.h>
+#include <unicode/ustring.h>
+
+#include "streamvbytedelta.h"
+
+typedef struct {
+	uint32_t term;
+	uint32_t doc;
+} tupe_t;
+
+typedef struct {
+	uint32_t size;
+	uint32_t cap;
+	uint8_t  *buff;
+} buff_t;
+
+static inline int nearest_power( uint64_t num ) {
+	num--;
+	num |= num >> 1;
+	num |= num >> 2;
+	num |= num >> 4;
+	num |= num >> 8;
+	num |= num >> 16;
+	num |= num >> 32;
+	return ++num;
 }
+
+void buff_grow( buff_t *b, size_t size ) {
+	if( b->size + size >= b->cap ) {
+		b->cap = nearest_power( b->cap + size + 1 );
+		b->buff = realloc( b->buff, b->cap );
+	}
+}
+
+void buff_cat( buff_t *b, const char *p ) {
+	if( p == NULL || *p == 0 ) return;
+	size_t len = strlen(p);
+	buff_grow( b, len);
+	memcpy( b->buff+b->size, p, len );
+	b->size += len;
+}
+
+void buff_catn( buff_t *b, const char *p, size_t rsize ) {
+	if( p == NULL || *p == 0 ) return;
+	buff_grow( b, rsize);
+	memcpy( b->buff+b->size, p, rsize );
+	b->size += rsize;
+	b->buff[b->size] = 0;
+}
+
+void buff_free( buff_t *b ) {
+	if( b->cap ) {
+		free(b->buff);
+	}
+}
+
+typedef struct {
+  UChar *str;
+  UBreakIterator *boundary;
+
+  int32_t start;
+  int32_t end;	
+} tokenizer_t;
+
+void tokenizer_init( tokenizer_t *t, const char *input ) {
+  memset( t, 0, sizeof(*t));
+	UErrorCode status = U_ZERO_ERROR;
+
+  t->str = malloc( sizeof(UChar) * strlen(input) );
+  u_uastrcpy(t->str, input);
+
+	t->boundary = ubrk_open(UBRK_WORD, "en_us", t->str, -1, &status );
+}
+
+int tokenizer_next( tokenizer_t *t, char *word, size_t size ) {
+  UChar   savedEndChar;
+  int k;
+
+  // start iterator
+  if( t->end == 0 ) {
+    t->start = ubrk_first(t->boundary);
+  }
+
+  // Find next word
+again:
+  t->end = ubrk_next(t->boundary);
+  if( t->end == UBRK_DONE ) {
+    return -1;
+  }
+
+	// Null terminate
+  savedEndChar = t->str[t->end];
+  t->str[t->end] = 0;
+
+	// Skip unct
+	if( t->end - t->start == 1 && u_ispunct( t->str[t->start] ) ) {
+    t->str[t->end] = savedEndChar;
+    t->start = t->end;
+    goto again;
+	}
+
+	// Skip whitespace
+	for( k=t->start; k<t->end; k++ ) {
+	  if( u_isspace( t->str[k] ) == 1 ) {
+      t->str[t->end] = savedEndChar;
+      t->start = t->end;
+			goto again;
+		}
+  }
+
+	// Copy to C bffer
+  u_austrncpy(word, t->str+t->start, size-1);
+  word[size-1] = 0;
+
+  printf("string[%2d..%2d] \"%s\" %d\n", t->start, t->end-1, word, u_isspace( t->str[t->start])); 
+  t->str[t->end] = savedEndChar;
+  t->start = t->end;
+  return 0;
+}
+
+void tokenizer_free( tokenizer_t *t ) {
+	ubrk_close(t->boundary);
+  free(t->str);
+}
+
+// Parse Crawl 
+typedef struct {
+	buff_t buff;
+
+	GumboOutput *output;
+	GumboNode *node;
+} crawl_parse_t;
+
+void crawl_parse_init( crawl_parse_t *c ) {
+	memset( c, 0, sizeof(*c));
+}
+
+void crawl_parse_real( crawl_parse_t *c, GumboNode *node ) {
+
+	uint32_t k;
+	if( node->type == GUMBO_NODE_TEXT ) {
+		buff_cat( &c->buff, node->v.text.text );
+	} else if( node->type == GUMBO_NODE_ELEMENT &&
+			node->v.element.tag != GUMBO_TAG_SCRIPT &&
+			node->v.element.tag != GUMBO_TAG_STYLE ) {
+		GumboVector *children = &node->v.element.children;
+		for(  k=0; k<children->length; ++k ) {
+			if( k > 0 && c->buff.size ) {
+				buff_cat( &c->buff, " ");
+			}
+			crawl_parse_real( c, (GumboNode*)children->data[k] );
+		}
+	}
+}
+
+void crawl_parse_parse( crawl_parse_t *c, uint8_t *content ) {
+	c->output = gumbo_parse( (const char *)content );
+	crawl_parse_real(c, c->output->root);
+	gumbo_destroy_output( &kGumboDefaultOptions, c->output );
+}
+
+void crawl_parse_free( crawl_parse_t *c ) {
+	buff_free( &c->buff );
+}
+
+
+// Fetch web page using CURL
+typedef struct {
+  CURL *curl_handle;
+	char *url;
+
+	buff_t buff;
+} crawl_fetch_t;
+
+
+void crawl_fetch_init( crawl_fetch_t *f, const char *url) {
+	memset( f, 0, sizeof(*f));
+	f->url = strdup(url);
+}
+
+size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp ) {
+	size_t rsize = size * nmemb;
+	crawl_fetch_t *f = (crawl_fetch_t *)userp;
+	buff_catn( &f->buff, content, rsize );
+	return rsize;
+}
+
+CURLcode crawl_fetch_fetch( crawl_fetch_t *f ) {
+	CURLcode res;
+	f->curl_handle = curl_easy_init();
+  curl_easy_setopt(f->curl_handle, CURLOPT_URL, f->url );
+  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEFUNCTION, crawl_fetch_data);
+  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEDATA, (void *)f);
+  res = curl_easy_perform(f->curl_handle);
+	printf("%s\n", curl_easy_strerror(res));
+  curl_easy_cleanup(f->curl_handle);
+	return res;
+} 
+
+void crawl_fetch_free( crawl_fetch_t *f ) {
+	free( f->url );
+	buff_free( &f->buff );
+}
+
+int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
+	// ALlocate enough data to read in the compressed bytes
+	uint8_t *cbuffer = malloc( N * sizeof(uint32_t));
+  fread( cbuffer, bcount, 1, in ); // bcount and N will be pointers intside head
+
+	chunk_decompress( chunk, cbuffer, N );
+
+	// Compressed buffer no longer needed
+	free(cbuffer);
+
+	return 0;
+}
+
+// This is written at the compressed buffer written to disk
+typedef struct {
+	// Number of entries
+	uint32_t N;
+	// Term that covers all entires
+	uint32_t term;
+	// Initial doc
+	uint32_t doc;
+	// Byte count of compressed data, follows immediatly
+	uint32_t bcount;
+} chunk_head_t;
+
+// This can read or write an index sequentially.  
+typedef struct {
+	// Read/write file
+	FILE *in;
+	// What we read into one unit at a time
+	tupe_t tupe;
+
+	// Most recent chunk header
+	chunk_head_t h;
+	// We write/read here
+	chunk_t chunk;
+	// Offset into chunk if reading
+	uint32_t roff;
+} ifile_t;
+
+// Forward document header file on disk
+typedef struct {
+	uint32_t N;
+	uint32_t bcount;
+  uint32_t id;
+} forward_head_t;
+
+// Forward document object
+typedef struct {
+	forward_head_t h;
+	chunk_t chunk;
+} forward_t;
+
+inline void forward_push_term( forward_t *f, uint32_t term );
+inline void forward_set_id( forward_t *f, uint32_t id );
+
+void forward_push_term( forward_t *f, uint32_t term ) {
+	chunk_push( &f->chunk, term );
+}
+void forward_set_id( forward_t *f, uint32_t id ) {
+	f->h.id = id;
+}
+
+void forward_free( forward_t *f ) {
+	chunk_free(&f->chunk);
+}
+
+typedef struct {
+	// Read/write file
+	FILE *in;
+} iforward_t;
+
+// Read next forward doc from index
+int iforward_read( iforward_t *file, forward_t *forward ) {
+	size_t rc = fread( &forward->h, sizeof(forward->h), 1, file->in );
+	if( rc == 0 )  {
+		// Nothering read, EOF
+		return -1;
+	}
+
+	return read_block( file->in, forward->h.N, forward->h.bcount, &forward->chunk );
+}
+
+int iforward_write( iforward_t *file, forward_t *forward ) {
+	uint8_t *cbuff = chunk_compress( &forward->chunk, &forward->h.bcount );
+	forward->h.N = chunk_size( &forward->chunk );
+	fwrite( &forward->h, sizeof(forward->h), 1, file->in );
+	fwrite( cbuff, forward->h.bcount, 1, file->in );
+	free(cbuff);
+	return 0;
+}
+
+void iforward_close( iforward_t *file ) {
+	fclose( file->in );
+}
+
+void ifile_init( ifile_t *file ) {
+	memset( file, 0, sizeof(*file));
+}
+
+// Read the into our buffer the next chunk from disk.  The format is 
+// chunk_head_t, followed by a varint compressed chunk of data.
+int ifile_real_read( ifile_t *file ) {
+	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
+	if( rc == 0 )  {
+		// Nothering read, EOF
+		return -1;
+	}
+
+	return read_block( file->in, file->h.N, file->h.bcount, &file->chunk );
+}
+
+
+// Write's a chunk to disk.  Format is chunk_head_t followed by varint compressed buffer
+void ifile_real_write( ifile_t *file ) {
+	// Create the chunk_heaad_t object and compress body
+	chunk_head_t h = { .N = chunk_size(&file->chunk), .term = file->h.term, .doc = file->h.doc };
+	uint8_t *cbuff = chunk_compress( &file->chunk, &h.bcount );
+
+	fwrite( &h, sizeof(h), 1, file->in );
+	fwrite( cbuff, h.bcount, 1, file->in );
+	free(cbuff);
+}
+
+// Read next tuple (term, doc) from the index.
+int ifile_read( ifile_t *file ) {
+
+	// Get the next doc from the buffer
+	if( chunk_get(&file->chunk, &file->roff, &file->tupe.doc ) == 0 )  {
+		return 0;
+	} else if( ifile_real_read( file ) ) { // Try reading a chunk of buffer is empty or we drained it
+		return -1;
+	} else {
+		// Chunk read, setup initial values
+		file->tupe.term = file->h.term;
+		file->tupe.doc = file->h.doc;
+		file->roff++;
+		return 0;
+	}
+
+	return 1;
+}
+
+// Close file, release memory
+void ifile_close( ifile_t *file ) {
+	fclose( file->in );
+	chunk_free( &file->chunk );
+}
+
+// Attempt to write tupe to disk.  THis will write to our internal buffer first if that's full 
+// the buffer is written to disk and the buffer is reset
+void ifile_write( ifile_t *file, tupe_t *tupe ) {
+
+	// Is our buffer empty?
+	if( chunk_size( &file->chunk) == 0 ) {
+		// Yes, copy term and first doc for when we write to disk.
+		file->h.term = tupe->term;
+		file->h.doc = tupe->doc;
+	}
+
+	// If term changed start of new run
+	if( tupe->term != file->h.term ) {
+		// It's full, empty it to disk
+		ifile_real_write( file );
+		chunk_reset( &file->chunk );
+	}
+
+	// Now copy to our buffer
+	if( chunk_push( &file->chunk, tupe->doc ) == 1  ) {
+		// It's full, empty it to disk
+		ifile_real_write( file );
+		chunk_reset( &file->chunk );
+	}
+}
+
+// Write what we have in our buffer to disk
+void ifile_flush( ifile_t *file ) {
+	ifile_real_write( file );
+	// Reset buffer
+	file->chunk.size = 0;
+}
+
+static inline int compare_ifile( const void *va, const void *vb ) {
+	const ifile_t *a = (ifile_t *)va;
+	const ifile_t *b = (ifile_t *)vb;
+
+	if( a->tupe.doc < b->tupe.doc ) {
+		return -1;
+	} else if( a->tupe.doc > b->tupe.doc ) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+// Merge multiple sorted ifiles.  This is a O(N*M) operation where M is the numer of 
+// files.
+static void merge( ifile_t **files, size_t nfiles, ifile_t *outs ) {
+  size_t k;
+
+	ifile_t *temp;
+
+	// Read in initial tuple for each ifile
+	for( k=0; k<nfiles; k++ ) {
+		if( ifile_read( files[k] ) ) {
+			// EOF remove file
+			ifile_close( files[k] );
+			memmove( &files[k], &files[k+1], nfiles-k-1*sizeof(ifile_t*));
+			nfiles--;
+		}
+	}
+
+	// Sort files
+	qsort( *files, nfiles, sizeof(ifile_t *), compare_ifile ); 
+
+	while( nfiles ) {
+		ifile_t *f = files[0];
+
+		// Write lowest tuple to output
+		printf("%d\n", f->tupe.doc );
+		ifile_write( outs, &f->tupe );
+
+		// Read next tuple for this file
+		if( ifile_read( f ) ) {
+			// EOF case
+			temp = f;
+			// Move above it down one in the array [the delete]
+			memmove( &files[0], &files[1], (nfiles-1)*sizeof(ifile_t*));
+			nfiles--;
+			// Copy the dude we just deleted to the end of the array
+			files[nfiles] = temp;
+			ifile_close( temp );
+		} else if( nfiles == 1 ) {
+			continue;
+		} else  {
+			// Binary search to see where this file should be inserted as it's tupe changed
+			size_t lo = 1;
+			size_t hi = nfiles;
+			size_t probe = lo;
+			size_t count_of_smaller_lines;
+
+			while (lo < hi) {
+				int cmp = compare_ifile( files[0], files[probe]);
+				if (cmp < 0 || cmp == 0 )  {
+				  hi = probe;
+				} else {
+				  lo = probe + 1;
+				}
+				probe = (lo + hi) / 2;
+			}
+
+			count_of_smaller_lines = lo - 1;
+
+			// Preserve the one we are moving
+			temp = files[0];
+			// Copy everything down up to the point of insertion
+			memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(ifile_t*));
+			// Insert or guy
+			files[count_of_smaller_lines] = temp;
+		}
+
+	}
+
+	ifile_flush( outs );
+}
+
+
+void test2(char *name, int step) {
+	FILE * a = fopen(name, "wb");
+  int k;
+	ifile_t outs;
+	ifile_init( &outs );
+	outs.in = a;
+
+	tupe_t t;
+	for( k=0; k<10; k+=step ) {
+		t.term = 1;
+		t.doc = k;
+		ifile_write( &outs, &t );
+	}
+	ifile_real_write( &outs );
+	ifile_close( &outs );
+}
+
+void test1(char *name, int step) {
+	FILE * a = fopen(name, "wb");
+	int k;
+	tupe_t t;
+	for(  k=0; k<10; k+=step ) {
+		t.term = 1;
+		t.doc = k;
+		fwrite( &t, sizeof(t), 1, a );
+	}
+	fclose(a);
+}
+
+int btest() {
+	buff_t b;
+	int k;
+ 
+  memset( &b, 0, sizeof(b));
+
+	for(  k=0; k<100; k++ ) {
+	buff_cat(&b, "DUDE");
+	}
+
+	buff_free(&b);
+	return 0;
+}
+
+int rtest() {
+	ifile_t outs;
+	ifile_init( &outs );
+	outs.in = fopen("D", "rb");
+	ifile_read( &outs );
+
+	return 0;
+}
+
+int ctest() {
+	chunk_t c = {0};
+
+	chunk_push(&c, 1);
+	chunk_push(&c, 1);
+	chunk_push(&c, 1);
+	chunk_push(&c, 1);
+
+	chunk_free(&c);
+	return 0;
+}
+
+int ftest() {
+	iforward_t outs;
+	outs.in = fopen("E", "wb");
+
+	forward_t doc = {{0},{0}};
+	forward_push_term( &doc, 1 );
+	forward_push_term( &doc, 2 );
+	forward_push_term( &doc, 3 );
+	forward_push_term( &doc, 4 );
+	forward_push_term( &doc, 5 );
+	forward_set_id( &doc, 15 );
+	
+	iforward_write( &outs, &doc );
+	iforward_close( &outs );
+
+	outs.in = fopen("E", "rb");
+	iforward_read( &outs, &doc );
+	assert( doc.h.id == 15 );
+	assert( doc.chunk.buffer[0] == 1 );
+	assert( doc.chunk.buffer[1] == 2 );
+	assert( doc.chunk.size == 5 );
+	forward_free(&doc);
+	return 0;
+}
+
+void	fetchtest() {
+	crawl_fetch_t f;
+	crawl_parse_t p;
+	tokenizer_t t;
+  char word[1024];
+
+	crawl_fetch_init( &f, "https://www.yahoo.com/");
+	crawl_fetch_fetch( &f );
+
+	crawl_parse_init( &p );
+	crawl_parse_parse( &p, f.buff.buff );
+
+	tokenizer_init( &t, (char *)p.buff.buff );
+  while( !tokenizer_next( &t, word, sizeof(word) ) ) {
+  }
+  tokenizer_free( &t );
+
+	crawl_parse_free( &p );
+	crawl_fetch_free( &f );
+}
+
+int main() {
+	fetchtest();
+
+	ctest();
+//	rtest();
+	ifile_t outs;
+	ifile_t a[3];
+
+	ifile_init( &outs );
+	test2("A", 2);
+	test2("B", 3);
+	test2("C", 4);
+
+	outs.in = fopen("D", "wb");
+
+	ifile_init( &a[0] );
+	ifile_init( &a[1] );
+	ifile_init( &a[2] );
+	a[0].in = fopen("A","rb");
+	a[1].in = fopen("B","rb");
+	a[2].in = fopen("C","rb");
+
+	printf("OK\n");
+	ifile_t *b[3] = { &a[0], &a[1], &a[2] };;
+	merge( b, 3, &outs);
+	ifile_close(&outs);
+
+	ftest();
+	btest();
+}
+
+
+
+
+
+
