@@ -1,9 +1,16 @@
-project(tool)
-set(CMAKE_C_FLAGS "-fpic -mavx -std=c11 -pedantic -g -Wall -Wextra -lm")
+project(fetch)
+cmake_minimum_required(VERSION 3.2)
+
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
+find_package(ICU REQUIRED)
+find_package(CURL REQUIRED)
+
+set(CMAKE_C_FLAGS "-I/usr/local/include -fpic -mavx -std=c11 -pedantic -g -pg -Wall -Wextra -lm -I/usr/include/x86_64-linux-gnu  -licuio -licui18n -licuuc -licudata -lcurl -I/usr/local/lib")
 set(CMAKE_C_FLAGS_RELEASE "-g")
 set(CMAKE_CXX_FLAGS "-g -std=c++11")
-
-set(source tool.c chunk.c sorter.c streamvbytedelta.c streamvbyte.c )
-
+set(source tool.c chunk.c streamvbytedelta.c streamvbyte.c )
+set(fetch fetch.c)
+add_executable(fetch ${fetch})
 add_executable(tool ${source})
 target_link_libraries(tool m)
+target_link_libraries(fetch m ICU::ICU curl gumbo)
