@@ -31,6 +31,8 @@ int dumper( char *tmplate, char *buffer, uint64_t blength ) {
 	return 0;
 }
 
+char tmp[255];
+
 int main( int argc, char **argv ) {
 
 	uint64_t *buffer;
@@ -39,20 +41,22 @@ int main( int argc, char **argv ) {
 	uint64_t mpercent = 50;
 	uint64_t msize = 0;
 	uint64_t moffset = 0;
-	char * tmplate = strdup("con_XXXXXX");
+	uint64_t size = 0;
+	int c;
+	char * tmplate = NULL;
 
-	// Only argument is %X where X is 1-100 specifing how much system memory to use
-	if( argc > 1 ) {
-		if( argv[1][0] == '%' )  {
-			uint64_t size = atoi( &argv[1][1] );
-			if( size > 0 && size < 100 ) mpercent = size;  
-		}
-
-		if( argc > 2 ) {
-			// I lied, also output template
-			tmplate = argv[2];
+	while((c = getopt(argc, argv, "m:o:")) != -1 ) {
+		switch(c) {
+			case 'm':
+				size = atoi( optarg );
+				if( size > 0 && size < 100 ) mpercent = size;  
+				break;
+			case 'o':
+				tmplate = strdup(optarg);
+				break;
 		}
 	}
+	if( tmplate == NULL ) tmplate = strdup("con_XXXXXX");
 
 	// Calculate how much memory we have and the nallocate mpercent of that for our use
 	struct sysinfo info = {0};
