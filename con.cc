@@ -13,6 +13,10 @@ int dumper( char *tmplate, char *buffer, uint64_t blength ) {
 	int fd;
 	char *dupe = strdup(tmplate);
 
+	if( blength == 0 ) {
+		return 0;
+	}
+
 	fd = mkstemp( dupe );
 	if( fd == -1 ) {
 		//error("Could not open output file");
