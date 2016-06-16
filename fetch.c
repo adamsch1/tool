@@ -176,9 +176,8 @@ typedef struct {
 } crawl_fetch_t;
 
 
-void crawl_fetch_init( crawl_fetch_t *f, const char *url) {
+void crawl_fetch_init( crawl_fetch_t *f ) {
 	memset( f, 0, sizeof(*f));
-	f->url = strdup(url);
 }
 
 size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp ) {
@@ -194,6 +193,7 @@ CURLcode crawl_fetch_fetch( crawl_fetch_t *f ) {
   curl_easy_setopt(f->curl_handle, CURLOPT_URL, f->url );
   curl_easy_setopt(f->curl_handle, CURLOPT_WRITEFUNCTION, crawl_fetch_data);
   curl_easy_setopt(f->curl_handle, CURLOPT_WRITEDATA, (void *)f);
+	curl_easy_setopt(f->curl_handle, CURLOPT_FOLLOWLOCATION, 1);
   res = curl_easy_perform(f->curl_handle);
 	printf("%s\n", curl_easy_strerror(res));
   curl_easy_cleanup(f->curl_handle);
@@ -205,33 +205,40 @@ void crawl_fetch_free( crawl_fetch_t *f ) {
 	buff_free( &f->buff );
 }
 
-void	fetchtest() {
-	crawl_fetch_t f;
-	crawl_parse_t p;
-	tokenizer_t t;
+typedef struct {
+	crawl_fetch_t fetch;
+	crawl_parse_t parse;
+	tokenizer_t   token;
+} handle_t;
+
+void handle_init( handle_t *hand ) {
+	crawl_fetch_init( &hand->fetch );
+	crawl_parse_init( &hand->parse ); 
+	//tokenizer_init( &hand->token, (char *)hand->parse.buff.buff );
+}
+
+void handle_run( handle_t *hand, const char *url ) {
   char word[1024];
-
-	crawl_fetch_init( &f, "http://web.mit.edu");
-	crawl_fetch_fetch( &f );
-
-	crawl_parse_init( &p );
-	crawl_parse_parse( &p, f.buff.buff );
-
-	tokenizer_init( &t, (char *)p.buff.buff );
-  while( !tokenizer_next( &t, word, sizeof(word) ) ) {
+	hand->fetch.url = strdup(url);
+	crawl_fetch_fetch( &hand->fetch );
+	crawl_parse_parse( &hand->parse, hand->fetch.buff.buff );
+	tokenizer_init( &hand->token, (char *)hand->parse.buff.buff );
+  while( !tokenizer_next( &hand->token, word, sizeof(word) ) ) {
   }
-  tokenizer_free( &t );
-
-	crawl_parse_free( &p );
-	crawl_fetch_free( &f );
+  tokenizer_free( &hand->token );
+	crawl_fetch_free( &hand->fetch );
 }
 
-int main() {
-	fetchtest();
+int main( int argc, char **argv ) {
+	handle_t handles[1];
+
+	handle_init( &handles[0] );
+	handle_run( &handles[0], "http://web.mit.edu");
+
+/*	while( fread( &data, 1, sizeof(data), stdin ) > 0 ) {
+		handles[0].fetch.url = strdup(data);
+					
+	}
+	*/
 }
-
-
-
-
-
 
