@@ -37,8 +37,8 @@ void ifile_flush( ifile_t *file ) {
 }
 
 static inline int compare_ifile( const void *va, const void *vb ) {
-	const ifile_t *a = (ifile_t *)va;
-	const ifile_t *b = (ifile_t *)vb;
+	const ifile_t *a = *(ifile_t **)va;
+	const ifile_t *b = *(ifile_t **)vb;
 
 	return (a->entry - b->entry);
 }
@@ -60,7 +60,6 @@ static void merge( ifile_t **files, size_t nfiles, ifile_t *outs ) {
 		}
 	}
 
-	// Sort files
 	qsort( files, nfiles, sizeof(ifile_t *), compare_ifile ); 
 
 	while( nfiles ) {
@@ -139,6 +138,7 @@ int main( int argc, char **argv) {
 		pfiles[k] = malloc(sizeof(ifile_t));
 		ifile_init( pfiles[k] );
 		pfiles[k]->in = fopen( bglob.gl_pathv[k], "rb");
+//		setvbuf( pfiles[k]->in, NULL, _IOFBF, 1024*1024*64);
 	}
 
 	ifile_t out;
