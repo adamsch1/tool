@@ -211,7 +211,7 @@ void	fetchtest() {
 	tokenizer_t t;
   char word[1024];
 
-	crawl_fetch_init( &f, "https://www.yahoo.com/");
+	crawl_fetch_init( &f, "http://web.mit.edu");
 	crawl_fetch_fetch( &f );
 
 	crawl_parse_init( &p );
