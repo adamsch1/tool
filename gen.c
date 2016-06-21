@@ -15,6 +15,7 @@ int main() {
   int rc;
 	for( k=0;k<MAX; k++ ) {
 #ifdef BUFF
+		if( k = 10 ) continue;
 		rc = fwrite( &k, sizeof(k), 1, stdout );
 #else
 		rc = write( STDOUT_FILENO, &k, sizeof(k));

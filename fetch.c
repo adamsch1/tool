@@ -115,6 +115,8 @@ again:
   u_austrncpy(word, t->str+t->start, size-1);
   word[size-1] = 0;
 
+	UErrorCode ecode;
+	u_strToLower( t->str+t->start, size-1, t->str+t->start, size-1, "", &ecode ); 
   printf("string[%2d..%2d] \"%s\" %d\n", t->start, t->end-1, word, u_isspace( t->str[t->start])); 
   t->str[t->end] = savedEndChar;
   t->start = t->end;
@@ -175,9 +177,45 @@ typedef struct {
 	buff_t buff;
 } crawl_fetch_t;
 
+int crawl_multi( crawl_fetch_t *handles, int num ) {
+	CURLM *multi_handle;
 
-void crawl_fetch_init( crawl_fetch_t *f ) {
+	multi_handle = curl_multi_init();
+
+	for( int k=0; k<num; k++ ) {
+		curl_multi_add_handle( multi_handle, handles[k]->curl_handle );
+	}
+
+	curl_multi_perform( multi_handle, &num );
+
+
+	do {
+		CURLMcode mc;
+		int numfds;
+		
+		mc =curl_multi_perform( multi_handle, &num );
+
+		mc = curl_multi_wait( multi_handle, NULL, 0, 1000, &numfds );
+		if( mc != CURLM_OK ) {
+		} else {
+			if( !numfds ) {
+			} else {
+				curl_multi_perform( multi_handle, &num );
+			}
+		}
+
+	} while( num );
+}
+
+
+void crawl_fetch_init( crawl_fetch_t *f, const char *url  ) {
 	memset( f, 0, sizeof(*f));
+	CURLcode res;
+	f->curl_handle = curl_easy_init();
+  curl_easy_setopt(f->curl_handle, CURLOPT_URL, f->url );
+  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEFUNCTION, crawl_fetch_data);
+  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEDATA, (void *)f);
+	curl_easy_setopt(f->curl_handle, CURLOPT_FOLLOWLOCATION, 1);
 }
 
 size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp ) {
@@ -186,19 +224,6 @@ size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp )
 	buff_catn( &f->buff, content, rsize );
 	return rsize;
 }
-
-CURLcode crawl_fetch_fetch( crawl_fetch_t *f ) {
-	CURLcode res;
-	f->curl_handle = curl_easy_init();
-  curl_easy_setopt(f->curl_handle, CURLOPT_URL, f->url );
-  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEFUNCTION, crawl_fetch_data);
-  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEDATA, (void *)f);
-	curl_easy_setopt(f->curl_handle, CURLOPT_FOLLOWLOCATION, 1);
-  res = curl_easy_perform(f->curl_handle);
-	printf("%s\n", curl_easy_strerror(res));
-  curl_easy_cleanup(f->curl_handle);
-	return res;
-} 
 
 void crawl_fetch_free( crawl_fetch_t *f ) {
 	free( f->url );
@@ -211,8 +236,8 @@ typedef struct {
 	tokenizer_t   token;
 } handle_t;
 
-void handle_init( handle_t *hand ) {
-	crawl_fetch_init( &hand->fetch );
+void handle_init( handle_t *hand, const char *url ) {
+	crawl_fetch_init( &hand->fetch, url );
 	crawl_parse_init( &hand->parse ); 
 	//tokenizer_init( &hand->token, (char *)hand->parse.buff.buff );
 }
@@ -220,7 +245,6 @@ void handle_init( handle_t *hand ) {
 void handle_run( handle_t *hand, const char *url ) {
   char word[1024];
 	hand->fetch.url = strdup(url);
-	crawl_fetch_fetch( &hand->fetch );
 	crawl_parse_parse( &hand->parse, hand->fetch.buff.buff );
 	tokenizer_init( &hand->token, (char *)hand->parse.buff.buff );
   while( !tokenizer_next( &hand->token, word, sizeof(word) ) ) {
@@ -233,8 +257,10 @@ int main( int argc, char **argv ) {
 	handle_t handles[1];
 
 	handle_init( &handles[0] );
-	handle_run( &handles[0], "http://web.mit.edu");
 
+
+	handle_run( &handles[0], "http://web.mit.edu");
+  crawl_multi( &handles, 1 );
 /*	while( fread( &data, 1, sizeof(data), stdin ) > 0 ) {
 		handles[0].fetch.url = strdup(data);
 					

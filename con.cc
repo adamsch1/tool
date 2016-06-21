@@ -5,6 +5,10 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 
+extern "C" {
+  #include "util.h"
+}
+
 #include <algorithm>
 #include <iterator>
 
@@ -59,10 +63,8 @@ int main( int argc, char **argv ) {
 	if( tmplate == NULL ) tmplate = strdup("con_XXXXXX");
 
 	// Calculate how much memory we have and the nallocate mpercent of that for our use
-	struct sysinfo info = {0};
-	// Not portable but meh.
-	sysinfo( &info );
-	msize = (uint64_t)(info.totalram * mpercent / 100.0);
+	
+	msize = ramsize() * mpercent / 100.0;
 	while( (buffer= (uint64_t*)malloc( msize )) == NULL ) {
 		// In case we cannot allocate fallback half
 		msize /= 2;
