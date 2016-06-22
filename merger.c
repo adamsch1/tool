@@ -138,7 +138,6 @@ int main( int argc, char **argv) {
 		pfiles[k] = malloc(sizeof(ifile_t));
 		ifile_init( pfiles[k] );
 		pfiles[k]->in = fopen( bglob.gl_pathv[k], "rb");
-//		setvbuf( pfiles[k]->in, NULL, _IOFBF, 1024*1024*64);
 	}
 
 	ifile_t out;
