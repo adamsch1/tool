@@ -12,7 +12,14 @@
 
 #include "util.h"
 
-uint64_t * _bsearch (uint64_t key, uint64_t *base, size_t nmemb ) {
+typedef struct {
+	int fd;
+	uint64_t *base;
+	size_t size;
+} inv_t;
+
+// Binary search hacked from libc.
+inline uint64_t * _bsearch (uint64_t key, uint64_t *base, size_t nmemb ) {
   size_t l, u, idx;
   uint64_t *p;
   int comparison;
@@ -39,25 +46,43 @@ uint64_t * _bsearch (uint64_t key, uint64_t *base, size_t nmemb ) {
   return NULL;
 }
 
-#define handle_error(msg) \
-	do { perror(msg); exit(EXIT_FAILURE); } while (0)
+int inv_init( inv_t *inv, const char *filename ) {
+	struct stat st;
+
+	memset(inv, 0, sizeof(*inv));
+
+	inv->fd = open( filename, O_RDONLY );
+	if( inv->fd == -1 ) return -1;
+
+	if( fstat( inv->fd, &st) == -1 ) {
+		return -1;
+	}
+
+	inv->base = (uint64_t *)mmap( NULL, st.st_size, PROT_READ, MAP_PRIVATE, inv->fd, 0 );
+	if( inv->base == MAP_FAILED ) {
+		return -1;
+	}
+
+	inv->size = st.st_size / sizeof(*inv->base);
+
+	return 0;
+}
+
+inline uint64_t * inv_search( inv_t *inv, uint64_t key ) {
+	return _bsearch( key, inv->base, inv->size );
+}
 
 int main( int argc, char **argv ) {
 
-	struct stat st;
 	int c;
-	int fd;
-	uint64_t *addr;
-	size_t    size;
 	uint64_t term=0;
+
+	inv_t inv;
 
 	while((c = getopt(argc, argv, "f:t:")) != -1 ) {
 		switch(c) {
 			case 'f':
-				fd = open( optarg, O_RDONLY );
-				if( fd == -1 ) {
-					handle_error( "open" );					
-        }
+				inv_init( &inv, optarg );
 				break;
 			case 't':
 				term = atoll( optarg );
@@ -65,23 +90,12 @@ int main( int argc, char **argv ) {
 		}
 	}
 
-	if( fstat( fd, &st) == -1 ) {
- 		handle_error( "stat" );
-	}
-
-	addr = (uint64_t *)mmap( NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
-	if( addr == MAP_FAILED ) {
-    handle_error( "mmap" );
-	}
-	size = st.st_size / sizeof(*addr);
-
-	printf("Size: %lu %lu\n", size, term );
-
 	clock_t tic = clock();
 	int max = 10000;
 	int fcount = 0;
 	for( int k=0; k<max; k++ ) {
-		uint64_t *r = _bsearch( term, addr, size );
+//		uint64_t *r = _bsearch( term, inv.base, inv.size );
+    uint64_t *r = inv_search( &inv, term );
 		fcount += r != NULL;
 	}
 	clock_t toc = clock();
