@@ -93,7 +93,8 @@ typedef struct {
 } crawl_parse_t;
 
 void crawl_parse_init( crawl_parse_t *c ) {
-	memset( c, 0, sizeof(*c));
+	c->output = 0;
+	c->node = 0;
 }
 
 void crawl_parse_real( crawl_parse_t *c, GumboNode *node ) {
@@ -156,15 +157,25 @@ int crawl_multi( std::vector<handle_t> handles ) {
 		int numfds;
 		
 		mc =curl_multi_perform( multi_handle, &num );
-
-		mc = curl_multi_wait( multi_handle, NULL, 0, 1000, &numfds );
-		if( mc != CURLM_OK ) {
-		} else {
-			if( !numfds ) {
-			} else {
-				curl_multi_perform( multi_handle, &num );
+		if( mc == CURLM_OK ) {
+			mc = curl_multi_wait( multi_handle, NULL, 0, 1000, &numfds );
+			if( mc != CURLM_OK ) {
+				break;
 			}
 		}
+
+		struct CURLMsg *m;
+		do {
+			int msgq = 0;
+			m = curl_multi_info_read(multi_handle, &msgq );
+			if( m && (m->msg == CURLMSG_DONE) ) {
+				CURL *e = m->easy_handle;
+				handle_t *hand;
+				curl_easy_getinfo( e, CURLINFO_PRIVATE, &hand );
+				curl_multi_remove_handle(multi_handle, e);
+				curl_easy_cleanup(e);
+			}
+		} while(m);
 
 	} while( num );
 }
@@ -178,10 +189,12 @@ size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp )
 
 
 void crawl_fetch_init( crawl_fetch_t *f, const char *url  ) {
-	memset( f, 0, sizeof(*f));
+	f->curl_handle = 0;
+	f->url = strdup(url);
+
 	CURLcode res;
 	f->curl_handle = curl_easy_init();
-  curl_easy_setopt(f->curl_handle, CURLOPT_URL, f->url );
+  curl_easy_setopt(f->curl_handle, CURLOPT_URL, url );
   curl_easy_setopt(f->curl_handle, CURLOPT_WRITEFUNCTION, crawl_fetch_data);
   curl_easy_setopt(f->curl_handle, CURLOPT_WRITEDATA, (void *)f);
 	curl_easy_setopt(f->curl_handle, CURLOPT_FOLLOWLOCATION, 1);
@@ -195,6 +208,8 @@ void crawl_fetch_free( crawl_fetch_t *f ) {
 void handle_init( handle_t *hand, const char *url ) {
 	crawl_fetch_init( &hand->fetch, url );
 	crawl_parse_init( &hand->parse ); 
+
+  curl_easy_setopt( hand->fetch.curl_handle, CURLOPT_PRIVATE, (void *)hand);
 }
 
 void handle_run( handle_t *hand ) {
