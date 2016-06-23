@@ -128,7 +128,7 @@ void crawl_parse_free( crawl_parse_t *c ) {
 // Fetch web page using CURL
 typedef struct {
   CURL *curl_handle;
-	char *url;
+	std::string url;
 
 	std::string buff;
 } crawl_fetch_t;
@@ -190,7 +190,8 @@ size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp )
 
 void crawl_fetch_init( crawl_fetch_t *f, const char *url  ) {
 	f->curl_handle = 0;
-	f->url = strdup(url);
+//	f->url = std::string(url);
+	f->url = url;
 
 	CURLcode res;
 	f->curl_handle = curl_easy_init();
@@ -201,7 +202,6 @@ void crawl_fetch_init( crawl_fetch_t *f, const char *url  ) {
 }
 
 void crawl_fetch_free( crawl_fetch_t *f ) {
-	free( f->url );
 }
 
 
