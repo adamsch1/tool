@@ -178,6 +178,8 @@ int crawl_multi( std::vector<handle_t> handles ) {
 		} while(m);
 
 	} while( num );
+
+	curl_multi_cleanup( multi_handle );
 }
 
 size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp ) {
