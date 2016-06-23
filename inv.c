@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <string.h>
+#include <string.h> 
 #include <sys/sysinfo.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -18,8 +18,31 @@ typedef struct {
 	size_t size;
 } inv_t;
 
+// Interpolation search hacked from wikipedia article log(log(n))
+// faster
+uint64_t * interpolation_search (uint64_t key, uint64_t *base, size_t size ) {
+    int low = 0;
+    int high = size - 1;
+    int mid;
+
+    while (base[high] != base[low] && key >= base[low] && key <= base[high]) {
+        mid = low + ((key - base[low]) * (high - low) / (base[high] - base[low]));
+
+        if (base[mid] < key)
+            low = mid + 1;
+        else if (key < base[mid])
+            high = mid - 1;
+        else
+            return &base[mid];
+    }
+
+    if (key == base[low])
+        return &base[low] ;
+    else
+        return NULL;
+}
 // Binary search hacked from libc.
-inline uint64_t * _bsearch (uint64_t key, uint64_t *base, size_t nmemb ) {
+uint64_t * _bsearch (uint64_t key, uint64_t *base, size_t nmemb ) {
   size_t l, u, idx;
   uint64_t *p;
   int comparison;
@@ -68,8 +91,9 @@ int inv_init( inv_t *inv, const char *filename ) {
 	return 0;
 }
 
-inline uint64_t * inv_search( inv_t *inv, uint64_t key ) {
+uint64_t * inv_search( inv_t *inv, uint64_t key ) {
 	return _bsearch( key, inv->base, inv->size );
+//	return interpolation_search( key, inv->base, inv->size );
 }
 
 int main( int argc, char **argv ) {
@@ -94,8 +118,8 @@ int main( int argc, char **argv ) {
 	int max = 10000;
 	int fcount = 0;
 	for( int k=0; k<max; k++ ) {
-//		uint64_t *r = _bsearch( term, inv.base, inv.size );
-    uint64_t *r = inv_search( &inv, term );
+		uint64_t *r = _bsearch( term, inv.base, inv.size );
+//    uint64_t *r = inv_search( &inv, term );
 		fcount += r != NULL;
 	}
 	clock_t toc = clock();
