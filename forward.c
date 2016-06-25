@@ -13,27 +13,29 @@
 
 #define _FILE_OFFSET_BITS 64
 
+// A document, has a url and a bunch of terms plus 
 typedef struct {
 	uint32_t id;
 	time_t   time;
 	uint32_t tcount;
 
-	off_t hterms;
-	off_t hurl;
+	off_t hterms; // byte offsets in forward heap file
+	off_t hurl;   
 
 } document_t;
 
+// Maintains forward index, which is a bunch of documents
 typedef struct {
-	FILE *file;
-	FILE *heap;
-	uint64_t  count;
+	FILE *file;    // Fixed size entries, the document_t go here
+	FILE *heap;    // Variable sized entries, like url and terms go here
+	uint64_t  count; 
 
-  document_t *daddr;
-  size_t dsize;
+  document_t *daddr; // Mmap to document_ file
+  size_t dsize;      // NUber of entries in this mmap of size document_t
 
-  char *haddr; 
+  char *haddr;  // mmap to heap file
 
-	uint32_t last_id;
+	uint32_t last_id; // Last ide written N+1 id > last_id or error
 } forward_t;
 
 
@@ -67,18 +69,20 @@ int document_set_url( document_t *doc, const char *url, FILE *heap ) {
 int document_set_terms( document_t *doc, uint32_t *terms, int count, FILE *heap ) {
 	doc->hterms = ftello( heap );
   doc->tcount = count;
-//	fwrite( &count, sizeof(count), 1, heap );
 	return fwrite( terms, sizeof(uint32_t), count, heap );
 }
 
+// THe document has the byte offsets to our url in the heap file
 char * forward_get_document_url( forward_t *forward, document_t *doc ) {
 	return forward->haddr + doc->hurl;
 }
 
+// THe document has the byte offsets to our list of terms in the heap file
 uint32_t * forward_get_document_terms( forward_t *forward, document_t *doc ) {
 	return (uint32_t*)(forward->haddr + doc->hterms);
 }
 
+// mmap the forward index for reading [not writing]
 int forward_mmap( forward_t *forward, const char *filename ) {
   struct stat st;
 
@@ -117,7 +121,11 @@ int forward_mmap( forward_t *forward, const char *filename ) {
   return 0;
 }
 
-document_t * interpolation_search (uint64_t key, document_t *base, size_t size ) {
+// Hacked from wikipedia - does an interpolation search against the document_t file which 
+// is keyed off the monotomically increasing document ID.  Each entry is fixed size so
+// we can perform this search.  The random sized stuff is in a separate file to simplify
+// finding documents after we write them. 
+static document_t * interpolation_search (uint64_t key, document_t *base, size_t size ) {
     int low = 0;
     int high = size - 1;
     int mid;
@@ -139,7 +147,7 @@ document_t * interpolation_search (uint64_t key, document_t *base, size_t size )
         return NULL;
 }
 
-document_t *forward_read( forward_t *forward, uint32_t id ) {
+document_t *forward_document_read( forward_t *forward, uint32_t id ) {
   return interpolation_search( id, forward->daddr, forward->dsize );
 }
 
@@ -175,8 +183,8 @@ int main() {
 
   document_t *p;
 
-  p = forward_read( &ff, 1234 );
-  p = forward_read( &ff, 1235 );
+  p = forward_document_read( &ff, 1234 );
+  p = forward_document_read( &ff, 1235 );
 
 	char *url = forward_get_document_url( &ff, p );
 	uint32_t *pterms = forward_get_document_terms( &ff, p );
