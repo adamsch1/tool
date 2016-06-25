@@ -32,6 +32,8 @@ typedef struct {
   size_t dsize;
 
   char *haddr; 
+
+	uint32_t last_id;
 } forward_t;
 
 
@@ -41,6 +43,7 @@ int forward_open( forward_t *forward, const char *file ) {
 	strcat(h, "_");
 	forward->file = fopen( file, "a+");
 	forward->heap = fopen( h, "a+");
+	forward->last_id = 0;
 }
 
 int forward_close( forward_t *forward ) {
@@ -49,6 +52,10 @@ int forward_close( forward_t *forward ) {
 }
 
 int forward_write( forward_t *forward, document_t *doc ) {
+	if( doc->id < forward->last_id ) {
+		return 0;
+	}
+	forward->last_id = doc->id;
 	return fwrite( doc, sizeof( *doc ), 1, forward->file );
 }
 
