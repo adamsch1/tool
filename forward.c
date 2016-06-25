@@ -60,8 +60,16 @@ int document_set_url( document_t *doc, const char *url, FILE *heap ) {
 int document_set_terms( document_t *doc, uint32_t *terms, int count, FILE *heap ) {
 	doc->hterms = ftello( heap );
   doc->tcount = count;
-	fwrite( &count, sizeof(count), 1, heap );
+//	fwrite( &count, sizeof(count), 1, heap );
 	return fwrite( terms, sizeof(uint32_t), count, heap );
+}
+
+char * forward_get_document_url( forward_t *forward, document_t *doc ) {
+	return forward->haddr + doc->hurl;
+}
+
+uint32_t * forward_get_document_terms( forward_t *forward, document_t *doc ) {
+	return (uint32_t*)(forward->haddr + doc->hterms);
 }
 
 int forward_mmap( forward_t *forward, const char *filename ) {
@@ -163,4 +171,6 @@ int main() {
   p = forward_read( &ff, 1234 );
   p = forward_read( &ff, 1235 );
 
+	char *url = forward_get_document_url( &ff, p );
+	uint32_t *pterms = forward_get_document_terms( &ff, p );
 }
