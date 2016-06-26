@@ -30,9 +30,11 @@ typedef struct {
 	FILE *heap;    // Variable sized entries, like url and terms go here
 	uint64_t  count; 
 
+	int dfd;
   document_t *daddr; // Mmap to document_ file
   size_t dsize;      // NUber of entries in this mmap of size document_t
 
+	int hfd;
   char *haddr;  // mmap to heap file
 
 	uint32_t last_id; // Last ide written N+1 id > last_id or error
@@ -46,11 +48,15 @@ int forward_open( forward_t *forward, const char *file ) {
 	forward->file = fopen( file, "a+");
 	forward->heap = fopen( h, "a+");
 	forward->last_id = 0;
+
+	return 0;
 }
 
 int forward_close( forward_t *forward ) {
 	fclose(forward->file);
 	fclose(forward->heap);
+
+	return 0;
 }
 
 int forward_write( forward_t *forward, document_t *doc ) {
@@ -72,6 +78,11 @@ int document_set_terms( document_t *doc, uint32_t *terms, int count, FILE *heap 
 	return fwrite( terms, sizeof(uint32_t), count, heap );
 }
 
+document_t * forward_get_document_at( forward_t *forward, int k ) {
+	if( k >= (int)forward->dsize ) return NULL;
+	return forward->daddr + k;
+}
+
 // THe document has the byte offsets to our url in the heap file
 char * forward_get_document_url( forward_t *forward, document_t *doc ) {
 	return forward->haddr + doc->hurl;
@@ -86,16 +97,16 @@ uint32_t * forward_get_document_terms( forward_t *forward, document_t *doc ) {
 int forward_mmap( forward_t *forward, const char *filename ) {
   struct stat st;
 
-  int fd = open( filename, O_RDONLY );
-  if( fd == -1 ) return -1;
+  forward->dfd = open( filename, O_RDONLY );
+  if( forward->dfd == -1 ) return -1;
 
-  if( fstat( fd, &st) == -1 ) {
-    return -1;
+  if( fstat( forward->dfd, &st) == -1 ) {
+    goto bail;
   }
 
-  forward->daddr = (document_t *)mmap( NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
+  forward->daddr = (document_t *)mmap( NULL, st.st_size, PROT_READ, MAP_PRIVATE, forward->dfd, 0 );
   if( forward->daddr == MAP_FAILED ) {
-    return -1;
+    goto bail;
   }
 
   forward->dsize = st.st_size / sizeof(document_t);
@@ -105,20 +116,27 @@ int forward_mmap( forward_t *forward, const char *filename ) {
 	strcat(h, "_");
 
   {
-		int fd = open( h, O_RDONLY );
-		if( fd == -1 ) return -1;
-
-		if( fstat( fd, &st) == -1 ) {
-			return -1;
+		forward->hfd = open( h, O_RDONLY );
+		if( forward->hfd == -1 ) {
+			goto bail;
 		}
 
-		forward->haddr = (char *)mmap( NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
+		if( fstat( forward->hfd, &st) == -1 ) {
+			goto bail;
+		}
+
+		forward->haddr = (char *)mmap( NULL, st.st_size, PROT_READ, MAP_PRIVATE, forward->hfd, 0 );
 		if( forward->haddr == MAP_FAILED ) {
-			return -1;
+			goto bail;
 		}
   }
 
   return 0;
+
+bail:
+	if( forward->dfd ) close(forward->dfd );
+	if( forward->hfd ) close(forward->hfd );
+	return -1;
 }
 
 // Hacked from wikipedia - does an interpolation search against the document_t file which 
@@ -151,6 +169,7 @@ document_t *forward_document_read( forward_t *forward, uint32_t id ) {
   return interpolation_search( id, forward->daddr, forward->dsize );
 }
 
+#if 0
 int main() {
 	forward_t ff = {0};
   document_t dd = {0};
@@ -189,3 +208,4 @@ int main() {
 	char *url = forward_get_document_url( &ff, p );
 	uint32_t *pterms = forward_get_document_terms( &ff, p );
 }
+#endif

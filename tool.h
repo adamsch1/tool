@@ -5,42 +5,36 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "kbtree.h"
+// A document, has a url and a bunch of terms plus 
+typedef struct {
+  uint32_t id;
+  time_t   time;
+  uint32_t tcount;
 
-typedef struct chunk_t chunk_t;
-// Array of document ids.  Can be compressed.  Can be chained in memory as a list
-struct chunk_t {
-  size_t   capacity;
-  uint32_t size;
+  off_t hterms; // byte offsets in forward heap file
+  off_t hurl;
 
-  uint32_t is_compressed : 1;
-  uint32_t max_size      : 25;
+} document_t;
 
-  union {
-    uint32_t *buffer;
-    uint8_t *cbuff;
-  };
+// Maintains forward index, which is a bunch of documents
+typedef struct {
+  FILE *file;    // Fixed size entries, the document_t go here
+  FILE *heap;    // Variable sized entries, like url and terms go here
+  uint64_t  count;
 
-	uint32_t term;
-  uint32_t bcount;
+  int dfd;
+  document_t *daddr; // Mmap to document_ file
+  size_t dsize;      // NUber of entries in this mmap of size document_t
 
-	chunk_t *next;
-};
+  int hfd;
+  char *haddr;  // mmap to heap file
 
-typedef struct _sorter_t sorter_t;
+  uint32_t last_id; // Last ide written N+1 id > last_id or error
+} forward_t;
 
-uint8_t * chunk_compress( chunk_t *chunk, uint32_t *bcount );
-int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk );
-int chunk_init( chunk_t *chunk );
-int chunk_push( chunk_t *chunk, uint32_t value );
-int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value );
-void chunk_free( chunk_t *chunk );
-int chunk_full( chunk_t *chunk );
+int forward_mmap( forward_t *forward, const char *filename );
+document_t * forward_get_document_at( forward_t *forward, int k );
+char * forward_get_document_url( forward_t *forward, document_t *doc );
+uint32_t * forward_get_document_terms( forward_t *forward, document_t *doc );
 
-chunk_t * chunk_list_push( chunk_t *chunk, uint32_t doc );
-void chunk_decompress( chunk_t *chunk, uint32_t N );
-
-sorter_t * sorter_init();
-void sorter_push( sorter_t *sorter, uint32_t term, uint32_t doc );
-void sorter_dump( sorter_t *sorter );
 #endif
