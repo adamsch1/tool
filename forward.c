@@ -13,32 +13,7 @@
 
 #define _FILE_OFFSET_BITS 64
 
-// A document, has a url and a bunch of terms plus 
-typedef struct {
-	uint32_t id;
-	time_t   time;
-	uint32_t tcount;
-
-	off_t hterms; // byte offsets in forward heap file
-	off_t hurl;   
-
-} document_t;
-
-// Maintains forward index, which is a bunch of documents
-typedef struct {
-	FILE *file;    // Fixed size entries, the document_t go here
-	FILE *heap;    // Variable sized entries, like url and terms go here
-	uint64_t  count; 
-
-	int dfd;
-  document_t *daddr; // Mmap to document_ file
-  size_t dsize;      // NUber of entries in this mmap of size document_t
-
-	int hfd;
-  char *haddr;  // mmap to heap file
-
-	uint32_t last_id; // Last ide written N+1 id > last_id or error
-} forward_t;
+#include "tool.h"
 
 
 int forward_open( forward_t *forward, const char *file ) {
