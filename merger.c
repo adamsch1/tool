@@ -114,7 +114,10 @@ static void merge( ifile_t **files, size_t nfiles, ifile_t *outs ) {
 
 // Read in as many files output by the con utility and merge them.  The con
 // utility sorts (term,doc_id) pairs so the merge utility does a N-way 
-// merge on the sorted files and outputs them to a new file.
+// merge on the sorted files and outputs them to a new file..  We 
+// will likely allow the merger utility to dump the sorted data to stdout 
+// so we can stream it to a remote object store easily since the final files
+// will be huge
 int main( int argc, char **argv) {
 
 	glob_t bglob = {0};
