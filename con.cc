@@ -12,6 +12,7 @@ extern "C" {
 #include <algorithm>
 #include <iterator>
 
+// Given a sorted buffer of data, dump it to a file
 int dumper( char *tmplate, char *buffer, uint64_t blength ) {
 	FILE *outs;
 	int fd;
@@ -37,6 +38,10 @@ int dumper( char *tmplate, char *buffer, uint64_t blength ) {
 
 char tmp[255];
 
+// Read in as many (term,doc_id) pairs as possible from stdout and sort them, then write 
+// the sorted data to a file matching the output template which is passed to mkstemp.
+// Continue this until all stdin is closed.  This effectively inverts the data into a simple
+// format that is then merged or what have you.  
 int main( int argc, char **argv ) {
 
 	uint64_t *buffer;
@@ -52,6 +57,7 @@ int main( int argc, char **argv ) {
 	while((c = getopt(argc, argv, "m:o:")) != -1 ) {
 		switch(c) {
 			case 'm':
+				// Express how much memoery to use as a %
 				size = atoi( optarg );
 				if( size > 0 && size < 100 ) mpercent = size;  
 				break;
