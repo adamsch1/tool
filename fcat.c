@@ -14,7 +14,9 @@ void dump( forward_t *ff ) {
 		document_t *doc = forward_get_document_at( ff, k );
 		uint32_t *terms  = forward_get_document_terms( ff, doc );
 		for( size_t j=0; j<doc->tcount; j++ ) {
-			printf("%d\n", terms[j] );
+			uint64_t pair = terms[j];
+		  pair = (pair << 32) | doc->id;
+			fwrite( &pair, sizeof(pair), 1, stdout );
 		}
 	}
 }
